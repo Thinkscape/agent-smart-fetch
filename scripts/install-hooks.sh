@@ -15,6 +15,5 @@ install_hook() {
 }
 
 install_hook pre-commit
-install_hook pre-push
 
 echo "✅ Git hooks installed in $HOOK_DIR"

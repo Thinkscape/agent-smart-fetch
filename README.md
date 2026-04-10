@@ -81,7 +81,7 @@ Integration tests:
 bun run test:integration
 ```
 
-Install local git hooks:
+Install the local pre-commit hook:
 
 ```bash
 bun run hooks:install

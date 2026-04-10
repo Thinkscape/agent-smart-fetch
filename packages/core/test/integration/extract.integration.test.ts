@@ -17,6 +17,8 @@ const TEST_URLS = {
   httpbinHtml: "https://httpbin.org/html",
   httpbinJson: "https://httpbin.org/json",
   browserLeaks: "https://tls.browserleaks.com/json",
+  rfc9110Text: "https://www.rfc-editor.org/rfc/rfc9110.txt",
+  neverSsl: "http://neverssl.com",
 };
 
 describeIf("integration: extraction pipeline", () => {
@@ -70,6 +72,47 @@ describeIf("integration: extraction pipeline", () => {
         expect(result.title).toContain("Next.js");
         expect(result.content.length).toBeGreaterThan(100);
       }
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "returns plain text content for live text/plain resources",
+    async () => {
+      const result = await defuddleFetch({
+        url: TEST_URLS.rfc9110Text,
+        format: "text",
+        maxChars: 2000,
+      });
+
+      expect(isError(result)).toBe(false);
+      if (!isError(result)) {
+        expect(result.site).toBe("www.rfc-editor.org");
+        expect(result.wordCount).toBeGreaterThan(1000);
+        expect(result.content).toContain("Request for Comments: 9110");
+      }
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "documents current live behavior for neverssl.com",
+    async () => {
+      const result = await defuddleFetch({
+        url: TEST_URLS.neverSsl,
+        format: "text",
+        maxChars: 2000,
+      });
+
+      if (isError(result)) {
+        expect(result.error).toMatch(
+          /timed out|No content extracted|HTTP \d+/i,
+        );
+        return;
+      }
+
+      expect(result.content).toContain("NeverSSL");
+      expect(result.wordCount).toBeGreaterThan(0);
     },
     TIMEOUT,
   );

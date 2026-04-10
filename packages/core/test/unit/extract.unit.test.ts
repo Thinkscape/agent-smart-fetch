@@ -133,6 +133,31 @@ describe("createDefuddleFetch", () => {
     );
   });
 
+  it("returns raw plain text bodies without invoking defuddle", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          contentType: "text/plain; charset=utf-8",
+          body: "Line 1\n\nLine 2\n",
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/file.txt",
+      format: "text",
+    });
+
+    expect(isError(result)).toBe(false);
+    expect(dependencies.defuddle).not.toHaveBeenCalled();
+    if (!isError(result)) {
+      expect(result.content).toBe("Line 1\n\nLine 2");
+      expect(result.wordCount).toBe(4);
+      expect(result.site).toBe("example.com");
+    }
+  });
+
   it("returns an error for unsupported non-HTML and non-JSON content types", async () => {
     const dependencies = createDependencies({
       fetch: mock(async () =>
@@ -169,8 +194,95 @@ describe("createDefuddleFetch", () => {
     expect(dependencies.defuddle).not.toHaveBeenCalled();
   });
 
-  it("returns an error when extraction finds no readable content", async () => {
+  it("falls back to DOM text when defuddle finds no readable content", async () => {
     const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          body: "<html><head><title>Simple</title></head><body><main><h1>Hello</h1><p>World</p></main></body></html>",
+        }),
+      ),
+      defuddle: mock(
+        async () => ({ content: "", wordCount: 0 }) satisfies ExtractedContent,
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/simple",
+      format: "text",
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.content).toContain("Hello");
+      expect(result.content).toContain("World");
+      expect(result.content).not.toContain("# Hello");
+      expect(result.wordCount).toBeGreaterThan(0);
+    }
+  });
+
+  it("converts DOM fallback content to markdown when format=markdown", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          body: '<html><body><main><h1>Hello</h1><p>Visit <a href="https://example.com">Example</a></p><ul><li>One</li><li>Two</li></ul></main></body></html>',
+        }),
+      ),
+      defuddle: mock(
+        async () => ({ content: "", wordCount: 0 }) satisfies ExtractedContent,
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/simple",
+      format: "markdown",
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.content).toContain("# Hello");
+      expect(result.content).toContain("Visit [Example](https://example.com)");
+      expect(result.content).toContain("- One");
+      expect(result.content).toContain("- Two");
+      expect(result.wordCount).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns raw server html when DOM fallback is needed and format=html", async () => {
+    const body =
+      "<html><body><main><h1>Hello</h1><p>World</p></main></body></html>";
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          body,
+        }),
+      ),
+      defuddle: mock(
+        async () => ({ content: "", wordCount: 0 }) satisfies ExtractedContent,
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/simple",
+      format: "html",
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.content).toBe(body);
+      expect(result.wordCount).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns an error when extraction and DOM fallback both find no readable content", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          body: "<html><body></body></html>",
+        }),
+      ),
       defuddle: mock(
         async () => ({ content: "", wordCount: 0 }) satisfies ExtractedContent,
       ),

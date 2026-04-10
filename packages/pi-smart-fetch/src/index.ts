@@ -37,6 +37,7 @@ type BatchRenderDetails = {
   batchProgress?: BatchFetchProgressSnapshot;
   batchResult?: BatchFetchResult;
   started?: boolean;
+  spinnerTick?: number;
 };
 
 const SPINNER_INTERVAL_MS = 100;
@@ -166,88 +167,41 @@ function renderBatchProgressText(
   return [summary, ...rows].join("\n");
 }
 
-class BatchProgressComponent {
-  private text = new Text("", 0, 0);
-  private timer: ReturnType<typeof setInterval> | null = null;
-  private spinnerTick = 0;
+function createResponsiveBatchComponent(
+  details: BatchRenderDetails,
+  expanded: boolean,
+  theme: {
+    bold(value: string): string;
+    fg(color: string, value: string): string;
+  },
+) {
+  const text = new Text("", 0, 0);
 
-  constructor(
-    private details: BatchRenderDetails,
-    private expanded: boolean,
-    private theme: {
-      bold(value: string): string;
-      fg(color: string, value: string): string;
+  return {
+    render(width: number) {
+      const snapshot = details.batchProgress;
+      if (!snapshot) {
+        text.setText(theme.fg("muted", "No batch progress available."));
+        return text.render(width);
+      }
+
+      const spinnerOffset =
+        (details.spinnerTick ?? 0) * Math.max(1, snapshot.items.length);
+      text.setText(
+        renderBatchProgressText(
+          snapshot,
+          width,
+          expanded,
+          theme,
+          spinnerOffset,
+        ),
+      );
+      return text.render(width);
     },
-    private requestRender: () => void,
-  ) {
-    this.syncTimer();
-  }
-
-  update(
-    details: BatchRenderDetails,
-    expanded: boolean,
-    theme: {
-      bold(value: string): string;
-      fg(color: string, value: string): string;
+    invalidate() {
+      text.invalidate();
     },
-  ) {
-    this.details = details;
-    this.expanded = expanded;
-    this.theme = theme;
-    this.text.invalidate();
-    this.syncTimer();
-  }
-
-  private hasActiveItems() {
-    const items = this.details.batchProgress?.items ?? [];
-    return items.some(
-      (item) =>
-        item.status === "queued" ||
-        item.status === "fetching" ||
-        item.status === "extracting",
-    );
-  }
-
-  private syncTimer() {
-    if (this.hasActiveItems()) {
-      if (this.timer) return;
-      this.timer = setInterval(() => {
-        this.spinnerTick += 1;
-        this.text.invalidate();
-        this.requestRender();
-      }, SPINNER_INTERVAL_MS);
-      return;
-    }
-
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
-  }
-
-  render(width: number) {
-    const snapshot = this.details.batchProgress;
-    if (!snapshot) {
-      this.text.setText(this.theme.fg("muted", "No batch progress available."));
-      return this.text.render(width);
-    }
-
-    const spinnerOffset = this.spinnerTick * Math.max(1, snapshot.items.length);
-    this.text.setText(
-      renderBatchProgressText(
-        snapshot,
-        width,
-        this.expanded,
-        this.theme,
-        spinnerOffset,
-      ),
-    );
-    return this.text.render(width);
-  }
-
-  invalidate() {
-    this.text.invalidate();
-  }
+  };
 }
 
 export default function piSmartFetchExtension(pi: ExtensionAPI) {
@@ -314,58 +268,86 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       const verbose =
         (params.verbose as boolean | undefined) ?? settings.verboseByDefault;
 
-      const batchResult = await executeBatchFetchToolCall(
-        params,
-        runtimeDefaults,
-        {
-          batchConcurrency: runtimeDefaults.batchConcurrency,
-          onProgress(snapshot) {
-            onUpdate?.({
-              content: [
-                {
-                  type: "text",
-                  text: `Started batch fetch for ${snapshot.total} URLs (${snapshot.completed}/${snapshot.total} complete).`,
-                },
-              ],
-              details: {
-                verbose,
-                started: true,
-                batchProgress: snapshot,
-              } satisfies BatchRenderDetails,
-            });
-          },
-        },
-      );
+      let latestSnapshot: BatchFetchProgressSnapshot | undefined;
+      let spinnerTick = 0;
+      let spinnerTimer: ReturnType<typeof setInterval> | null = null;
 
-      const finalProgress: BatchFetchProgressSnapshot = {
-        items: batchResult.items.map((item) => ({
-          index: item.index,
-          url: item.request.url,
-          status: item.status,
-          progress: item.progress,
-          ...(item.error ? { error: item.error } : {}),
-        })),
-        total: batchResult.total,
-        completed: batchResult.total,
-        succeeded: batchResult.succeeded,
-        failed: batchResult.failed,
-        batchConcurrency: batchResult.batchConcurrency,
+      const emitProgress = (snapshot: BatchFetchProgressSnapshot) => {
+        onUpdate?.({
+          content: [
+            {
+              type: "text",
+              text: `Started batch fetch for ${snapshot.total} URLs (${snapshot.completed}/${snapshot.total} complete).`,
+            },
+          ],
+          details: {
+            verbose,
+            started: true,
+            batchProgress: snapshot,
+            spinnerTick,
+          } satisfies BatchRenderDetails,
+        });
       };
 
-      return {
-        content: [
+      try {
+        spinnerTimer = setInterval(() => {
+          if (
+            !latestSnapshot ||
+            latestSnapshot.completed >= latestSnapshot.total
+          ) {
+            return;
+          }
+          spinnerTick += 1;
+          emitProgress(latestSnapshot);
+        }, SPINNER_INTERVAL_MS);
+
+        const batchResult = await executeBatchFetchToolCall(
+          params,
+          runtimeDefaults,
           {
-            type: "text",
-            text: buildBatchFetchResponseText(batchResult, { verbose }),
+            batchConcurrency: runtimeDefaults.batchConcurrency,
+            onProgress(snapshot) {
+              latestSnapshot = snapshot;
+              emitProgress(snapshot);
+            },
           },
-        ],
-        details: {
-          verbose,
-          started: true,
-          batchProgress: finalProgress,
-          batchResult,
-        } satisfies BatchRenderDetails,
-      };
+        );
+
+        const finalProgress: BatchFetchProgressSnapshot = {
+          items: batchResult.items.map((item) => ({
+            index: item.index,
+            url: item.request.url,
+            status: item.status,
+            progress: item.progress,
+            ...(item.error ? { error: item.error } : {}),
+          })),
+          total: batchResult.total,
+          completed: batchResult.total,
+          succeeded: batchResult.succeeded,
+          failed: batchResult.failed,
+          batchConcurrency: batchResult.batchConcurrency,
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: buildBatchFetchResponseText(batchResult, { verbose }),
+            },
+          ],
+          details: {
+            verbose,
+            started: true,
+            batchProgress: finalProgress,
+            batchResult,
+            spinnerTick,
+          } satisfies BatchRenderDetails,
+        };
+      } finally {
+        if (spinnerTimer) {
+          clearInterval(spinnerTimer);
+        }
+      }
     },
 
     renderCall(args, theme) {
@@ -378,18 +360,12 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       return new Text(text, 0, 0);
     },
 
-    renderResult(result, { expanded }, theme, context) {
-      const details = (result.details as BatchRenderDetails | undefined) ?? {};
-      const component = context.lastComponent;
-
-      if (component instanceof BatchProgressComponent) {
-        component.update(details, expanded, theme);
-        return component;
-      }
-
-      return new BatchProgressComponent(details, expanded, theme, () => {
-        context.invalidate();
-      });
+    renderResult(result, { expanded }, theme) {
+      return createResponsiveBatchComponent(
+        (result.details as BatchRenderDetails | undefined) ?? {},
+        expanded,
+        theme,
+      );
     },
   });
 }

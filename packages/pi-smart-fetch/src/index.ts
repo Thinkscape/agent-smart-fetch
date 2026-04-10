@@ -64,26 +64,44 @@ function renderProgressBar(
   theme: {
     fg(color: string, value: string): string;
   },
+  spinnerTick: number,
 ): string {
   const innerWidth = Math.max(4, width - 2);
   const filled = Math.max(
     0,
     Math.min(innerWidth, Math.round(item.progress * innerWidth)),
   );
-  const empty = Math.max(0, innerWidth - filled);
-  const barColor =
-    item.status === "error"
-      ? "error"
-      : item.status === "done"
-        ? "success"
-        : "accent";
 
-  return [
-    theme.fg("muted", "["),
-    theme.fg(barColor, "█".repeat(filled)),
-    theme.fg("dim", "░".repeat(empty)),
-    theme.fg("muted", "]"),
-  ].join("");
+  if (item.status === "done" || item.status === "error") {
+    const barColor = item.status === "error" ? "error" : "success";
+    const empty = Math.max(0, innerWidth - filled);
+    return [
+      theme.fg("muted", "["),
+      theme.fg(barColor, "█".repeat(filled)),
+      theme.fg("dim", "░".repeat(empty)),
+      theme.fg("muted", "]"),
+    ].join("");
+  }
+
+  const pulseWidth = Math.min(3, innerWidth);
+  const pulseStart = spinnerTick % innerWidth;
+  const cells = Array.from({ length: innerWidth }, (_, index) => {
+    const inPulse = Array.from({ length: pulseWidth }, (_unused, offset) => {
+      return (pulseStart + offset) % innerWidth === index;
+    }).some(Boolean);
+
+    if (item.status === "queued") {
+      return inPulse ? theme.fg("accent", "▒") : theme.fg("dim", "░");
+    }
+
+    if (inPulse) {
+      return theme.fg("warning", index < filled ? "▓" : "▒");
+    }
+
+    return index < filled ? theme.fg("accent", "█") : theme.fg("dim", "░");
+  });
+
+  return [theme.fg("muted", "["), ...cells, theme.fg("muted", "]")].join("");
 }
 
 function renderStatusGlyph(
@@ -99,7 +117,10 @@ function renderStatusGlyph(
     case "error":
       return theme.fg("error", "✗");
     case "queued":
-      return theme.fg("muted", "○");
+      return theme.fg(
+        "muted",
+        SPINNER_FRAMES[spinnerIndex % SPINNER_FRAMES.length] ?? "⠋",
+      );
     default:
       return theme.fg(
         "accent",
@@ -116,7 +137,7 @@ function renderBatchProgressText(
     bold(value: string): string;
     fg(color: string, value: string): string;
   },
-  spinnerOffset = 0,
+  spinnerTick = 0,
 ): string {
   const summary = [
     theme.fg("toolTitle", theme.bold("batch_web_fetch ")),
@@ -139,11 +160,7 @@ function renderBatchProgressText(
   );
 
   const rows = snapshot.items.map((item, index) => {
-    const glyph = renderStatusGlyph(
-      item,
-      snapshot.completed + index + spinnerOffset,
-      theme,
-    );
+    const glyph = renderStatusGlyph(item, spinnerTick + index, theme);
     const url = theme.fg("accent", truncateMiddle(item.url, urlWidth));
     const statusColor =
       item.status === "error"
@@ -154,7 +171,12 @@ function renderBatchProgressText(
             ? "muted"
             : "warning";
     const status = theme.fg(statusColor, pad(item.status, statusWidth));
-    const bar = renderProgressBar(item, progressWidth, theme);
+    const bar = renderProgressBar(
+      item,
+      progressWidth,
+      theme,
+      spinnerTick + index * 2,
+    );
 
     const baseRow = `${glyph} ${url} ${status} ${bar}`;
     if (!expanded || !item.error) {
@@ -185,16 +207,9 @@ function createResponsiveBatchComponent(
         return text.render(width);
       }
 
-      const spinnerOffset =
-        (details.spinnerTick ?? 0) * Math.max(1, snapshot.items.length);
+      const spinnerTick = details.spinnerTick ?? 0;
       text.setText(
-        renderBatchProgressText(
-          snapshot,
-          width,
-          expanded,
-          theme,
-          spinnerOffset,
-        ),
+        renderBatchProgressText(snapshot, width, expanded, theme, spinnerTick),
       );
       return text.render(width);
     },

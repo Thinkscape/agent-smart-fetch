@@ -143,10 +143,12 @@ npm publish --access public
 
 ### GitHub Actions publish flow
 
-A tag-based workflow is included:
-- push a tag like `v0.1.0`
-- configure `NPM_TOKEN` in GitHub repository secrets
-- GitHub Actions runs verification and publishes to npm
+A tag-based workflow is included using npm Trusted Publishing:
+- configure npm Trusted Publishing for this GitHub repository/workflow
+- push a tag like `v0.1.1`
+- GitHub Actions verifies the package and publishes to npm via OIDC
+
+No long-lived `NPM_TOKEN` secret is required.
 
 ### ClawHub
 

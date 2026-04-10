@@ -1,6 +1,6 @@
 {
   "name": "agent-defuddle-fetch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "OpenClaw plugin for web content extraction with browser-grade TLS fingerprinting (wreq-js) and superior content extraction (Defuddle).",
   "license": "MIT",

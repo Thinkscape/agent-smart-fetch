@@ -249,6 +249,44 @@ describe("createDefuddleFetch", () => {
     }
   });
 
+  it("uses the original DOM for fallback after defuddle mutates its working document", async () => {
+    const body = `
+      <html>
+        <body>
+          <div class="header"><h1>NeverSSL</h1></div>
+          <div class="content"><noscript><h2>What?</h2><p>This website is for logging on.</p></noscript></div>
+        </body>
+      </html>
+    `;
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          body,
+        }),
+      ),
+      defuddle: mock(async (document: Document) => {
+        document.querySelectorAll("noscript").forEach((node) => {
+          node.remove();
+        });
+        return { content: "", wordCount: 0 } satisfies ExtractedContent;
+      }),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/mutated",
+      format: "text",
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.content).toContain("NeverSSL");
+      expect(result.content).toContain("What?");
+      expect(result.content).toContain("This website is for logging on.");
+      expect(result.wordCount).toBeGreaterThan(3);
+    }
+  });
+
   it("returns raw server html when DOM fallback is needed and format=html", async () => {
     const body =
       "<html><body><main><h1>Hello</h1><p>World</p></main></body></html>";

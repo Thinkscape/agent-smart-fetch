@@ -483,18 +483,23 @@ export function createDefuddleFetch(
     }
 
     hooks.onStatusChange?.("extracting");
-    const document = parseLinkedomHTML(rawBody, finalUrl);
-    const extracted = await dependencies.defuddle(document, finalUrl, {
-      markdown: format !== "html",
-      removeImages,
-      includeReplies,
-    });
+    const fallbackDocument = parseLinkedomHTML(rawBody, finalUrl);
+    const extractionDocument = parseLinkedomHTML(rawBody, finalUrl);
+    const extracted = await dependencies.defuddle(
+      extractionDocument,
+      finalUrl,
+      {
+        markdown: format !== "html",
+        removeImages,
+        includeReplies,
+      },
+    );
 
     let extractedContent = extracted.content;
     let wordCount = extracted.wordCount;
 
     if (!extractedContent || wordCount === 0) {
-      const fallbackText = extractDomTextFallback(document);
+      const fallbackText = extractDomTextFallback(fallbackDocument);
       if (!fallbackText) {
         return {
           error: `No content extracted from ${opts.url}. May need JS rendering or is blocked.`,
@@ -505,7 +510,7 @@ export function createDefuddleFetch(
         format === "html"
           ? rawBody
           : format === "markdown"
-            ? extractDomMarkdownFallback(document) || fallbackText
+            ? extractDomMarkdownFallback(fallbackDocument) || fallbackText
             : fallbackText;
       wordCount = estimateWordCount(fallbackText);
     }

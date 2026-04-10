@@ -21,6 +21,10 @@ const TEST_URLS = {
   neverSsl: "http://neverssl.com",
 };
 
+function expectAcceptableNeverSslError(error: string) {
+  expect(error).toMatch(/timed out|No content extracted|HTTP \d+/i);
+}
+
 describeIf("integration: extraction pipeline", () => {
   it("discovers a recent chrome profile", () => {
     const profile = getLatestChromeProfile();
@@ -96,7 +100,26 @@ describeIf("integration: extraction pipeline", () => {
   );
 
   it(
-    "documents current live behavior for neverssl.com",
+    "returns html-safe content for live text/plain resources in html mode",
+    async () => {
+      const result = await defuddleFetch({
+        url: TEST_URLS.rfc9110Text,
+        format: "html",
+        maxChars: 1000,
+      });
+
+      expect(isError(result)).toBe(false);
+      if (!isError(result)) {
+        expect(result.site).toBe("www.rfc-editor.org");
+        expect(result.content).toContain("<pre>");
+        expect(result.content).toContain("Request for Comments: 9110");
+      }
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "falls back to original DOM text for neverssl.com when extraction yields no article",
     async () => {
       const result = await defuddleFetch({
         url: TEST_URLS.neverSsl,
@@ -105,14 +128,62 @@ describeIf("integration: extraction pipeline", () => {
       });
 
       if (isError(result)) {
-        expect(result.error).toMatch(
-          /timed out|No content extracted|HTTP \d+/i,
-        );
+        expectAcceptableNeverSslError(result.error);
         return;
       }
 
       expect(result.content).toContain("NeverSSL");
-      expect(result.wordCount).toBeGreaterThan(0);
+      expect(result.wordCount).toBeGreaterThan(20);
+      expect(result.content).toContain("What?");
+      expect(result.content).toContain("How?");
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "converts original DOM fallback content to markdown for neverssl.com",
+    async () => {
+      try {
+        const result = await defuddleFetch({
+          url: TEST_URLS.neverSsl,
+          format: "markdown",
+          maxChars: 2000,
+        });
+
+        if (isError(result)) {
+          expectAcceptableNeverSslError(result.error);
+          return;
+        }
+
+        expect(result.content).toContain("# NeverSSL");
+        expect(result.wordCount).toBeGreaterThan(20);
+        expect(result.content).toContain("## What?");
+        expect(result.content).toContain("## How?");
+      } catch (error) {
+        expectAcceptableNeverSslError(String(error));
+      }
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "returns raw server html for neverssl.com in html mode when fallback is needed",
+    async () => {
+      const result = await defuddleFetch({
+        url: TEST_URLS.neverSsl,
+        format: "html",
+        maxChars: 2000,
+      });
+
+      if (isError(result)) {
+        expectAcceptableNeverSslError(result.error);
+        return;
+      }
+
+      expect(result.wordCount).toBeGreaterThan(20);
+      expect(result.content).toContain("<html>");
+      expect(result.content).toContain("<title>NeverSSL - Connecting ...");
+      expect(result.content).toContain("window.location.href");
     },
     TIMEOUT,
   );

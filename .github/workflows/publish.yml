@@ -1,5 +1,8 @@
 name: Publish package
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 on:
   push:
     tags:
@@ -12,6 +15,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,8 +28,19 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@latest
+
+      - name: Print tool versions
+        run: |
+          node --version
+          npm --version
+          bun --version
+          npm config get registry
+          node -p "require('./package.json').repository?.url"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -41,4 +56,6 @@ jobs:
         run: bun run check && bun run pack:dry-run
 
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        env:
+          NPM_CONFIG_PROVENANCE: true
+        run: npm publish --provenance --access public --loglevel verbose

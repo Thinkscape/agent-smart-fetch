@@ -47,7 +47,8 @@
     "node": ">=22"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "openclaw": {
     "extensions": [
@@ -81,7 +82,7 @@
     "version:patch": "bun run test && npm version patch --no-git-tag-version",
     "version:minor": "bun run test && npm version minor --no-git-tag-version",
     "release": "bun run check && npm version patch --no-git-tag-version && git add -A && git commit -m \"chore: release v$(node -p 'require(\"./package.json\").version')\" && git tag -a \"v$(node -p 'require(\"./package.json\").version')\" -m \"Release v$(node -p 'require(\"./package.json\").version')\"",
-    "release:publish": "npm publish --access public",
+    "release:publish": "npm publish --provenance --access public",
     "update-deps": "bun update && bun run detect-latest-chrome",
     "detect-latest-chrome": "bun run scripts/detect-chrome.ts",
     "prepack": "bun run check"

@@ -69,11 +69,6 @@ jobs:
       - name: Package dry runs
         run: bun run pack:dry-run:all
 
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: packages/core/coverage/
 
   integration:
     runs-on: ubuntu-latest

@@ -64,44 +64,28 @@ function renderProgressBar(
   theme: {
     fg(color: string, value: string): string;
   },
-  spinnerTick: number,
 ): string {
   const innerWidth = Math.max(4, width - 2);
   const filled = Math.max(
     0,
     Math.min(innerWidth, Math.round(item.progress * innerWidth)),
   );
+  const empty = Math.max(0, innerWidth - filled);
+  const barColor =
+    item.status === "error"
+      ? "error"
+      : item.status === "done"
+        ? "success"
+        : item.status === "queued"
+          ? "muted"
+          : "accent";
 
-  if (item.status === "done" || item.status === "error") {
-    const barColor = item.status === "error" ? "error" : "success";
-    const empty = Math.max(0, innerWidth - filled);
-    return [
-      theme.fg("muted", "["),
-      theme.fg(barColor, "█".repeat(filled)),
-      theme.fg("dim", "░".repeat(empty)),
-      theme.fg("muted", "]"),
-    ].join("");
-  }
-
-  const pulseWidth = Math.min(3, innerWidth);
-  const pulseStart = spinnerTick % innerWidth;
-  const cells = Array.from({ length: innerWidth }, (_, index) => {
-    const inPulse = Array.from({ length: pulseWidth }, (_unused, offset) => {
-      return (pulseStart + offset) % innerWidth === index;
-    }).some(Boolean);
-
-    if (item.status === "queued") {
-      return inPulse ? theme.fg("accent", "▒") : theme.fg("dim", "░");
-    }
-
-    if (inPulse) {
-      return theme.fg("warning", index < filled ? "▓" : "▒");
-    }
-
-    return index < filled ? theme.fg("accent", "█") : theme.fg("dim", "░");
-  });
-
-  return [theme.fg("muted", "["), ...cells, theme.fg("muted", "]")].join("");
+  return [
+    theme.fg("muted", "["),
+    theme.fg(barColor, "█".repeat(filled)),
+    theme.fg("dim", "░".repeat(empty)),
+    theme.fg("muted", "]"),
+  ].join("");
 }
 
 function renderStatusGlyph(
@@ -171,12 +155,7 @@ function renderBatchProgressText(
             ? "muted"
             : "warning";
     const status = theme.fg(statusColor, pad(item.status, statusWidth));
-    const bar = renderProgressBar(
-      item,
-      progressWidth,
-      theme,
-      spinnerTick + index * 2,
-    );
+    const bar = renderProgressBar(item, progressWidth, theme);
 
     const baseRow = `${glyph} ${url} ${status} ${bar}`;
     if (!expanded || !item.error) {

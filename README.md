@@ -147,6 +147,7 @@ A tag-based workflow is included using npm Trusted Publishing:
 - configure npm Trusted Publishing for this GitHub repository/workflow
 - push a tag like `v0.1.1`
 - GitHub Actions verifies the package and publishes to npm via OIDC
+- the workflow uses Node 24 and npm `11.5.1+`, which npm Trusted Publishing requires
 
 No long-lived `NPM_TOKEN` secret is required.
 

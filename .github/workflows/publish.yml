@@ -1,8 +1,5 @@
 name: Publish package
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 on:
   push:
     tags:
@@ -15,10 +12,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
-      packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -26,21 +22,20 @@ jobs:
           bun-version: latest
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Upgrade npm for Trusted Publishing
+      - name: Upgrade npm
         run: npm install -g npm@latest
 
-      - name: Print tool versions
+      - name: Verify publish toolchain
         run: |
           node --version
           npm --version
           bun --version
-          npm config get registry
-          node -p "require('./package.json').repository?.url"
+          node -e "const { execSync } = require('node:child_process'); const [major, minor, patch] = execSync('npm --version', { encoding: 'utf8' }).trim().split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error('npm 11.5.1+ required for Trusted Publishing');"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -58,4 +53,4 @@ jobs:
       - name: Publish to npm
         env:
           NPM_CONFIG_PROVENANCE: true
-        run: npm publish --provenance --access public --loglevel verbose
+        run: npm publish --provenance --access public

@@ -1,6 +1,6 @@
 # openclaw-smart-fetch
 
-`openclaw-smart-fetch` adds a smarter fetching plugin for OpenClaw by exposing `defuddle_fetch`.
+`openclaw-smart-fetch` adds a smarter fetching plugin for OpenClaw by exposing `smart_fetch`.
 
 It combines:
 - `wreq-js` for browser-like transport fingerprints
@@ -19,7 +19,7 @@ Typical advantages:
 
 A good rule of thumb:
 - use built-in `web_fetch` for simple pages
-- use `defuddle_fetch` when pages are blocked, noisy, or extraction quality matters
+- use `smart_fetch` when pages are blocked, noisy, or extraction quality matters
 
 ## Bot-detection focus
 
@@ -35,7 +35,7 @@ If a page requires JS execution, login, scrolling, or clicking, use browser auto
 ## What tool it exposes
 
 This package registers:
-- `defuddle_fetch`
+- `smart_fetch`
 
 OpenClaw keeps the separate tool name because overriding/hoisting built-in `web_fetch` is not the desired path here.
 
@@ -55,7 +55,7 @@ openclaw plugins install -l /absolute/path/to/agent-smart-fetch/packages/opencla
 
 ## Use cases
 
-Use `defuddle_fetch` when you want to:
+Use `smart_fetch` when you want to:
 - fetch pages that reject naive HTTP clients
 - extract the readable body from articles, docs, and blog posts
 - reduce noise before passing content to an agent
@@ -64,17 +64,17 @@ Use `defuddle_fetch` when you want to:
 
 ## Parameters
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `url` | string | required | URL to fetch |
-| `browser` | string | `chrome_145` | Browser profile used for transport fingerprinting |
-| `os` | string | `windows` | OS profile: `windows`, `macos`, `linux`, `android`, `ios` |
-| `headers` | object | auto | Extra request headers |
-| `maxChars` | number | `50000` | Maximum returned characters |
-| `format` | `markdown` \| `html` \| `text` | `markdown` | Output format |
-| `removeImages` | boolean | `false` | Strip image references from output |
-| `includeReplies` | boolean \| `extractors` | `extractors` | Include replies/comments |
-| `proxy` | string | none | Proxy URL |
+| Parameter         | Type                          | Default         | Description                                               |
+|-------------------|-------------------------------|-----------------|-----------------------------------------------------------|
+| `url`             | string                        | required        | URL to fetch                                              |
+| `browser`         | string                        | `chrome_145`    | Browser profile used for transport fingerprinting         |
+| `os`              | string                        | `windows`       | OS profile: `windows`, `macos`, `linux`, `android`, `ios` |
+| `headers`         | object                        | auto            | Extra request headers                                     |
+| `maxChars`        | number                        | `50000`         | Maximum returned characters                               |
+| `format`          | `markdown` \| `html` \| `text`| `markdown`      | Output format                                             |
+| `removeImages`    | boolean                       | `false`         | Strip image references from output                        |
+| `includeReplies`  | boolean \| `extractors`       | `extractors`    | Include replies/comments                                  |
+| `proxy`           | string                        | none            | Proxy URL                                                 |
 
 ## OpenClaw config
 

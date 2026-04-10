@@ -1,36 +1,19 @@
 # pi-smart-fetch
 
-`pi-smart-fetch` adds a smarter `web_fetch` tool to pi.dev by combining:
-- `wreq-js` for browser-like transport fingerprints
-- `Defuddle` for readable content extraction
+`pi-smart-fetch` adds a smarter `web_fetch` tool to pi.dev.
 
-It is designed for pages where a naive Node.js `fetch()` often gets blocked, challenged, or returns HTML that is technically valid but poor for agent consumption.
+## Features
 
-## What problem it solves
-
-Compared to a naive `fetch()` approach in Node.js:
-- it is **harder to detect as a non-browser client** because the TLS/HTTP layer looks more like a real browser
-- it is **better at surviving anti-bot checks** that inspect transport fingerprints instead of only headers
-- it returns **clean extracted content** instead of raw page markup
-- it gives agents **useful metadata** and less noise
-
-This package is a good fit when you want lightweight readable-page retrieval without stepping up to full browser automation.
-
-## Bot-detection focus
-
-This tool specifically helps with sites that look at:
-- TLS/client fingerprints
-- browser-vs-header consistency
-- suspicious non-browser transport behavior
-
-It does **not** execute JavaScript, solve interactive challenges, log in, click buttons, or scroll pages.
-
-If the site needs real browser execution, use browser automation instead.
-
-## What tool it exposes
-
-This package registers:
-- `web_fetch`
+Compared with naive Node.js `fetch()`, this package gives you:
+- **browser-like transport fingerprints** via `wreq-js`, which helps on sites that inspect TLS and HTTP client behavior
+- **clean readable extraction** via `Defuddle`, so agents get article content instead of raw noisy HTML
+- **better success on bot-defended pages** where plain server-side requests are blocked, challenged, or degraded
+- **useful metadata** like title, author, published date, site, and language when available
+- **multiple output formats**: `markdown`, `html`, or `text`
+- **the familiar pi tool name**: it registers `web_fetch`
+- **pi-specific behavior** including an optional `verbose` flag and defaults from pi settings
+- **lower overhead than browser automation** when you do not need JS execution, login, scrolling, or clicks
+- **clear limits**: it does not execute JavaScript or solve interactive anti-bot flows
 
 ## Install
 
@@ -43,13 +26,14 @@ pi install npm:pi-smart-fetch
 From a local checkout:
 
 ```bash
-pi install /absolute/path/to/agent-smart-fetch/packages/pi-smart-fetch
+gh repo clone Thinkscape/agent-smart-fetch
+pi install agent-smart-fetch/packages/pi-smart-fetch
 ```
 
 ## Use cases
 
 Use `web_fetch` when you want to:
-- fetch articles/docs/blog posts with a browser-like network fingerprint
+- fetch articles, docs, and blog posts with a browser-like network fingerprint
 - analyze readable content instead of raw HTML
 - reduce agent token waste on noisy page chrome
 - get author/title/published metadata when available
@@ -64,22 +48,66 @@ By default, the tool returns a compact response containing non-empty:
 - Published
 - content
 
-Set `verbose: true` to include fuller metadata such as site, language, word count, and browser profile info.
+Set `verbose: true` to include fuller metadata such as:
+- site
+- language
+- word count
+- browser profile info
+
+## Example tool outputs
+
+### Compact output (default)
+
+```text
+> URL: https://example.com/blog/some-article
+> Title: Some Article
+> Author: Jane Doe
+> Published: 2026-03-12
+
+# Some Article
+
+This is the cleaned readable content extracted from the page.
+It omits most navigation, footer, and unrelated chrome.
+```
+
+### Verbose output (`verbose: true`)
+
+```text
+> URL: https://example.com/blog/some-article
+> Title: Some Article
+> Author: Jane Doe
+> Published: 2026-03-12
+> Site: Example Blog
+> Language: en
+> Words: 1284
+> Browser: chrome_145/windows
+
+# Some Article
+
+This is the cleaned readable content extracted from the page.
+It includes the same body content, but with a richer metadata header.
+```
+
+### Error output
+
+```text
+Error: Invalid URL: not-a-url
+```
 
 ## Parameters
 
-| Parameter | Type | Default | Description |
-| --- | --- | --- | --- |
-| `url` | string | required | URL to fetch |
-| `browser` | string | `chrome_145` | Browser profile used for transport fingerprinting |
-| `os` | string | `windows` | OS profile: `windows`, `macos`, `linux`, `android`, `ios` |
-| `headers` | object | auto | Extra request headers |
-| `maxChars` | number | `50000` | Maximum returned characters |
-| `format` | `markdown` \| `html` \| `text` | `markdown` | Output format |
-| `removeImages` | boolean | `false` | Strip image references from output |
-| `includeReplies` | boolean \| `extractors` | `extractors` | Include replies/comments |
-| `proxy` | string | none | Proxy URL |
-| `verbose` | boolean | `false` | Include the full metadata header |
+| Parameter         | Type                          | Default         | Description                                                                  |
+|-------------------|-------------------------------|-----------------|------------------------------------------------------------------------------|
+| `url`             | string                        | required        | URL to fetch                                                                 |
+| `browser`         | string                        | `chrome_145`    | Browser profile used for transport fingerprinting                            |
+| `os`              | string                        | `windows`       | OS profile: `windows`, `macos`, `linux`, `android`, `ios`                   |
+| `headers`         | object                        | auto            | Extra request headers                                                        |
+| `maxChars`        | number                        | `50000`         | Maximum returned characters. Can be overridden by pi settings                |
+| `format`          | `markdown` \| `html` \| `text` | `markdown`      | Output format                                                                |
+| `removeImages`    | boolean                       | `false`         | Strip image references from output                                           |
+| `includeReplies`  | boolean \| `extractors`       | `extractors`    | Include replies/comments                                                     |
+| `proxy`           | string                        | none            | Proxy URL                                                                    |
+| `verbose`         | boolean                       | `false`         | Include the full metadata header. Can default from `smartFetchVerboseByDefault` |
 
 ## pi settings
 
@@ -87,14 +115,24 @@ Optional custom settings in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 
 ```json
 {
-  "webFetchVerboseByDefault": false,
-  "webFetchDefaultMaxChars": 12000
+  "smartFetchVerboseByDefault": false,
+  "smartFetchDefaultMaxChars": 12000,
+  "smartFetchDefaultTimeoutMs": 15000,
+  "smartFetchDefaultBrowser": "chrome_145",
+  "smartFetchDefaultOs": "windows",
+  "smartFetchDefaultRemoveImages": false,
+  "smartFetchDefaultIncludeReplies": "extractors"
 }
 ```
 
 Behavior:
-- `webFetchVerboseByDefault` sets the default for `verbose`
-- `webFetchDefaultMaxChars` sets the default for `maxChars`
+- `smartFetchVerboseByDefault` sets the default for `verbose`
+- `smartFetchDefaultMaxChars` sets the runtime default for `maxChars`
+- `smartFetchDefaultTimeoutMs` sets the runtime request timeout
+- `smartFetchDefaultBrowser` sets the default browser fingerprint profile
+- `smartFetchDefaultOs` sets the default OS fingerprint profile
+- `smartFetchDefaultRemoveImages` sets the default for image stripping
+- `smartFetchDefaultIncludeReplies` sets the default replies/comments behavior
 - project `.pi/settings.json` overrides global `~/.pi/agent/settings.json`
 
 ## When not to use it

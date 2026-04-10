@@ -14,7 +14,10 @@ interface RegisteredPiTool {
     signal: AbortSignal | undefined,
     onUpdate: unknown,
     ctx: { cwd: string },
-  ): Promise<{ content: Array<{ type: string; text: string }> }>;
+  ): Promise<{
+    content: Array<{ type: string; text: string }>;
+    details?: Record<string, unknown>;
+  }>;
 }
 
 function registerPiTool() {
@@ -64,7 +67,7 @@ describe("pi extension", () => {
     await mkdir(join(cwd, ".pi"), { recursive: true });
     await writeFile(
       join(cwd, ".pi", "settings.json"),
-      JSON.stringify({ webFetchVerboseByDefault: false }, null, 2),
+      JSON.stringify({ smartFetchVerboseByDefault: false }, null, 2),
     );
 
     const response = await registeredTool.execute(
@@ -76,5 +79,6 @@ describe("pi extension", () => {
     );
 
     expect(response.content[0]?.text).toContain("Error: Invalid URL");
+    expect(response.details).toEqual({ error: true, verbose: false });
   });
 });

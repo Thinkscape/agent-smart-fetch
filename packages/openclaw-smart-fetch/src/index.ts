@@ -33,7 +33,7 @@ const plugin = {
     const defaults = resolvePluginDefaults(api.pluginConfig);
 
     api.registerTool({
-      name: "defuddle_fetch",
+      name: "smart_fetch",
       description: [
         "Fetch a URL with browser-grade TLS fingerprinting and extract clean, readable content.",
         "Uses Rust native bindings to impersonate real browsers at the TLS/HTTP2 level (JA3/JA4 match).",
@@ -60,7 +60,7 @@ const plugin = {
     });
 
     api.logger.info(
-      `defuddle_fetch tool registered (default: ${defaults.browser}/${defaults.os})`,
+      `smart_fetch tool registered (default: ${defaults.browser}/${defaults.os})`,
     );
   },
 };

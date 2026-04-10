@@ -7,7 +7,7 @@ import {
   isError,
   resolveFetchToolDefaults,
 } from "smart-fetch-core";
-import { loadPiWebFetchSettings } from "./settings";
+import { loadPiSmartFetchSettings } from "./settings";
 
 const toolDescription = [
   "Fetch a URL with browser-grade TLS fingerprinting and extract clean, readable content.",
@@ -30,16 +30,14 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       verbose: Type.Optional(
         Type.Boolean({
           description:
-            "Include the full metadata header (site, language, word count, browser fingerprint info). Default: false, or webFetchVerboseByDefault from pi settings.",
+            "Include the full metadata header (site, language, word count, browser fingerprint info). Default: false, or smartFetchVerboseByDefault from pi settings.",
         }),
       ),
     }),
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const settings = await loadPiWebFetchSettings(ctx.cwd, getAgentDir());
-      const runtimeDefaults = resolveFetchToolDefaults({
-        maxChars: settings.defaultMaxChars,
-      });
+      const settings = await loadPiSmartFetchSettings(ctx.cwd, getAgentDir());
+      const runtimeDefaults = resolveFetchToolDefaults(settings);
       const verbose =
         (params.verbose as boolean | undefined) ?? settings.verboseByDefault;
       const result = await executeFetchToolCall(params, runtimeDefaults);

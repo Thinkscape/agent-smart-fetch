@@ -163,12 +163,49 @@ describe("createDefuddleFetch", () => {
       format: "text",
     });
 
+    expect(dependencies.defuddle).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/final",
+      expect.objectContaining({ markdown: true }),
+    );
     expect(isError(result)).toBe(false);
     if (!isError(result)) {
       expect(result.content).toContain("Heading");
       expect(result.content).toContain("Bold Link");
       expect(result.content).not.toContain("# ");
       expect(result.content).not.toContain("[");
+    }
+  });
+
+  it("preserves cleaned HTML output when format=html", async () => {
+    const dependencies = createDependencies({
+      defuddle: mock(
+        async () =>
+          ({
+            content:
+              "<article><h1>Hello</h1><p><strong>World</strong></p></article>",
+            wordCount: 2,
+          }) satisfies ExtractedContent,
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/article",
+      format: "html",
+    });
+
+    expect(dependencies.defuddle).toHaveBeenCalledWith(
+      expect.anything(),
+      "https://example.com/final",
+      expect.objectContaining({ markdown: false }),
+    );
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.content).toBe(
+        "<article><h1>Hello</h1><p><strong>World</strong></p></article>",
+      );
+      expect(result.content).toContain("<strong>");
     }
   });
 

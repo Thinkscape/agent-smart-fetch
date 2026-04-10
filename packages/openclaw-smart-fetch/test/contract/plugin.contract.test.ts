@@ -3,7 +3,7 @@ import plugin from "../../src/index";
 import type { ToolRegistrationApi } from "../../src/types";
 
 describe("plugin contract", () => {
-  it("registers a defuddle_fetch tool with the expected schema surface", () => {
+  it("registers a smart_fetch tool with the expected schema surface", () => {
     let registeredTool:
       | Parameters<ToolRegistrationApi["registerTool"]>[0]
       | undefined;
@@ -18,7 +18,7 @@ describe("plugin contract", () => {
     plugin.register(api);
 
     expect(registeredTool).toBeDefined();
-    expect(registeredTool?.name).toBe("defuddle_fetch");
+    expect(registeredTool?.name).toBe("smart_fetch");
     expect(registeredTool?.description).toContain(
       "browser-grade TLS fingerprinting",
     );

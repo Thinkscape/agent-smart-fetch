@@ -22,7 +22,7 @@ describe("resolvePluginDefaults", () => {
 });
 
 describe("plugin registration", () => {
-  it("registers the defuddle_fetch tool and logs the configured default profile", () => {
+  it("registers the smart_fetch tool and logs the configured default profile", () => {
     let registeredTool: { name: string } | undefined;
     const api: ToolRegistrationApi = {
       pluginConfig: { browser: "firefox_147", os: "linux" },
@@ -34,9 +34,9 @@ describe("plugin registration", () => {
 
     plugin.register(api);
 
-    expect(registeredTool?.name).toBe("defuddle_fetch");
+    expect(registeredTool?.name).toBe("smart_fetch");
     expect(api.logger.info).toHaveBeenCalledWith(
-      "defuddle_fetch tool registered (default: firefox_147/linux)",
+      "smart_fetch tool registered (default: firefox_147/linux)",
     );
   });
 

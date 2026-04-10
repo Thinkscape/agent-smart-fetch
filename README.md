@@ -1,17 +1,13 @@
-# agent-smart-fetch
+# Agent Smart Fetch
 
-A Bun monorepo for smart web fetching across multiple agent harnesses.
+## Overview
 
-## Start here
+Better web fetching for agents.
 
-Published packages:
-- [`pi-smart-fetch`](./packages/pi-smart-fetch/README.md) — pi.dev extension package, registers `web_fetch`
-- [`openclaw-smart-fetch`](./packages/openclaw-smart-fetch/README.md) — OpenClaw plugin package, registers `defuddle_fetch`
+### [Smart Fetch for pi.dev](./packages/pi-smart-fetch/README.md) — pi.dev extension package, registers `web_fetch`
+### [Smart Fetch for OpenClaw](./packages/openclaw-smart-fetch/README.md) — OpenClaw plugin package, registers `smart_fetch`
 
-Internal package:
-- `packages/core` — shared fetch/extract core used by both published packages; not published to npm
-
-## Why use this repo
+## Why use Smart Fetch?
 
 ### 1. `wreq-js` improves fetching on bot-defended sites
 
@@ -47,7 +43,7 @@ Benefits:
 - **Consistent behavior across harnesses**
 - **Harness-appropriate tool names**
   - pi → `web_fetch`
-  - OpenClaw → `defuddle_fetch`
+  - OpenClaw → `smart_fetch`
 - **Shared tests and fetch/extraction logic** without duplicating implementation
 - **Future harness support** can be added without rewriting the core pipeline
 

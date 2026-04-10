@@ -1,6 +1,6 @@
 {
   "name": "openclaw-smart-fetch",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "type": "module",
   "description": "OpenClaw smart fetch plugin with browser-grade TLS fingerprinting and Defuddle extraction.",
   "license": "MIT",

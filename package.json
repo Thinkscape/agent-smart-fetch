@@ -1,5 +1,5 @@
 {
-  "name": "openclaw-defuddle-fetch",
+  "name": "agent-defuddle-fetch",
   "version": "0.1.0",
   "type": "module",
   "description": "OpenClaw plugin for web content extraction with browser-grade TLS fingerprinting (wreq-js) and superior content extraction (Defuddle).",
@@ -7,11 +7,11 @@
   "author": "Thinkscape",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Thinkscape/openclaw-defuddle-fetch.git"
+    "url": "git+https://github.com/Thinkscape/agent-defuddle-fetch.git"
   },
-  "homepage": "https://github.com/Thinkscape/openclaw-defuddle-fetch#readme",
+  "homepage": "https://github.com/Thinkscape/agent-defuddle-fetch#readme",
   "bugs": {
-    "url": "https://github.com/Thinkscape/openclaw-defuddle-fetch/issues"
+    "url": "https://github.com/Thinkscape/agent-defuddle-fetch/issues"
   },
   "keywords": [
     "openclaw",

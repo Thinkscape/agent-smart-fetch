@@ -1,4 +1,4 @@
-# openclaw-defuddle-fetch
+# agent-defuddle-fetch
 
 An OpenClaw plugin that provides `defuddle_fetch`: browser-fingerprinted HTTP fetching via `wreq-js`, followed by clean article extraction via `Defuddle`.
 
@@ -33,7 +33,7 @@ In those cases, use a browser automation tool instead.
 ### Local development
 
 ```bash
-openclaw plugins install -l ./projects/openclaw-defuddle-fetch
+openclaw plugins install -l ./projects/agent-defuddle-fetch
 ```
 
 ### From npm
@@ -41,7 +41,7 @@ openclaw plugins install -l ./projects/openclaw-defuddle-fetch
 Once published:
 
 ```bash
-openclaw plugins install openclaw-defuddle-fetch
+openclaw plugins install agent-defuddle-fetch
 ```
 
 ### From ClawHub
@@ -49,7 +49,7 @@ openclaw plugins install openclaw-defuddle-fetch
 If published to ClawHub, OpenClaw can install it there too:
 
 ```bash
-openclaw plugins install clawhub:openclaw-defuddle-fetch
+openclaw plugins install clawhub:agent-defuddle-fetch
 ```
 
 OpenClaw tries ClawHub first and falls back to npm for bare package specs.

@@ -67,7 +67,7 @@ export interface FetchDependencies {
   getProfiles(): string[];
 }
 
-export interface PluginConfig {
+export interface FetchToolConfig {
   maxChars?: number;
   timeoutMs?: number;
   browser?: string;
@@ -76,21 +76,11 @@ export interface PluginConfig {
   includeReplies?: IncludeRepliesOption;
 }
 
-export interface ToolRegistrationApi {
-  pluginConfig?: PluginConfig;
-  registerTool(definition: {
-    name: string;
-    description: string;
-    parameters: unknown;
-    execute(
-      toolCallId: string,
-      params: Record<string, unknown>,
-    ): Promise<{
-      content: Array<{ type: "text"; text: string }>;
-      isError?: boolean;
-    }>;
-  }): void;
-  logger: {
-    info(message: string): void;
-  };
+export interface FetchToolDefaults {
+  maxChars: number;
+  timeoutMs: number;
+  browser: string;
+  os: string;
+  removeImages: boolean;
+  includeReplies: IncludeRepliesOption;
 }

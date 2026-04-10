@@ -1,0 +1,74 @@
+{
+  "name": "openclaw-smart-fetch",
+  "version": "0.1.4",
+  "type": "module",
+  "description": "OpenClaw smart fetch plugin with browser-grade TLS fingerprinting and Defuddle extraction.",
+  "license": "MIT",
+  "author": "Thinkscape",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Thinkscape/agent-smart-fetch.git"
+  },
+  "homepage": "https://github.com/Thinkscape/agent-smart-fetch#readme",
+  "bugs": {
+    "url": "https://github.com/Thinkscape/agent-smart-fetch/issues"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "smart-fetch",
+    "defuddle",
+    "wreq-js",
+    "content-extraction",
+    "web-fetch",
+    "tls-fingerprinting"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.3.0",
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.3.2",
+      "minGatewayVersion": "2026.3.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.2",
+      "pluginSdkVersion": "2026.3.2"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "bun run clean && bunx tsup --config tsup.config.ts",
+    "test": "bun test test",
+    "typecheck": "bunx tsc -p tsconfig.json",
+    "check": "bun run test && bun run build && bun run typecheck",
+    "pack:dry-run": "bun run build && npm pack --dry-run"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.49",
+    "defuddle": "^0.14.0",
+    "linkedom": "^0.18.12",
+    "wreq-js": "^2.2.2"
+  }
+}

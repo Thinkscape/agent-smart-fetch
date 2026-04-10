@@ -1,0 +1,60 @@
+import type { FetchResult } from "./types";
+
+function buildHeader(
+  parts: Array<[label: string, value: string | number | undefined]>,
+) {
+  return parts
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([label, value]) => `> ${label}: ${value}`)
+    .join("\n");
+}
+
+export function markdownToText(markdown: string): string {
+  return markdown
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, "")
+    .replace(/^>\s+/gm, "")
+    .replace(/^[-*+]\s+/gm, "• ")
+    .replace(/`([^`]+)`/g, "$1");
+}
+
+export function truncateContent(content: string, maxChars: number): string {
+  if (content.length <= maxChars) return content;
+  return `${content.slice(0, maxChars)}\n\n[... truncated]`;
+}
+
+export function buildCompactMetadataHeader(result: FetchResult): string {
+  return buildHeader([
+    ["URL", result.finalUrl],
+    ["Title", result.title],
+    ["Author", result.author],
+    ["Published", result.published],
+  ]);
+}
+
+export function buildMetadataHeader(result: FetchResult): string {
+  return buildHeader([
+    ["URL", result.finalUrl],
+    ["Title", result.title],
+    ["Author", result.author],
+    ["Published", result.published],
+    ["Site", result.site],
+    ["Language", result.language],
+    ["Words", result.wordCount],
+    ["Browser", `${result.browser}/${result.os}`],
+  ]);
+}
+
+export function buildFetchResponseText(
+  result: FetchResult,
+  options: { verbose?: boolean } = {},
+): string {
+  const header = options.verbose
+    ? buildMetadataHeader(result)
+    : buildCompactMetadataHeader(result);
+
+  return header ? `${header}\n\n${result.content}` : result.content;
+}

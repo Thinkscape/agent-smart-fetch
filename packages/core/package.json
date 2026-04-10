@@ -1,0 +1,74 @@
+{
+  "name": "smart-fetch-core",
+  "private": true,
+  "version": "0.1.4",
+  "type": "module",
+  "description": "Internal shared smart fetch core used by the pi and OpenClaw adapters.",
+  "license": "MIT",
+  "author": "Thinkscape",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Thinkscape/agent-smart-fetch.git"
+  },
+  "homepage": "https://github.com/Thinkscape/agent-smart-fetch#readme",
+  "bugs": {
+    "url": "https://github.com/Thinkscape/agent-smart-fetch/issues"
+  },
+  "keywords": [
+    "smart-fetch",
+    "defuddle",
+    "wreq-js",
+    "content-extraction",
+    "web-fetch",
+    "tls-fingerprinting"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./extract": {
+      "types": "./dist/extract.d.ts",
+      "import": "./dist/extract.js"
+    },
+    "./format": {
+      "types": "./dist/format.d.ts",
+      "import": "./dist/format.js"
+    },
+    "./tool": {
+      "types": "./dist/tool.d.ts",
+      "import": "./dist/tool.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.3.0",
+    "node": ">=22"
+  },
+  "scripts": {
+    "clean": "rm -rf dist coverage",
+    "build": "bun run clean && bunx tsc -p tsconfig.build.json",
+    "test": "bun test test/unit",
+    "test:integration": "RUN_INTEGRATION=1 bun test test/integration --timeout 30000",
+    "coverage": "bun test test/unit --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage",
+    "typecheck": "bunx tsc -p tsconfig.json",
+    "check": "bun run test && bun run build && bun run typecheck",
+    "pack:dry-run": "bun run build && npm pack --dry-run"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.49",
+    "defuddle": "^0.14.0",
+    "linkedom": "^0.18.12",
+    "wreq-js": "^2.2.2"
+  }
+}

@@ -7,7 +7,30 @@ on:
   workflow_dispatch:
 
 jobs:
-  verify:
+  package-check:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package:
+          - core
+          - pi-smart-fetch
+          - openclaw-smart-fetch
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check package
+        run: cd packages/${{ matrix.package }} && bun run check
+
+  workspace-verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,26 +47,20 @@ jobs:
       - name: Format check
         run: bun run format:check
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Unit + contract tests
-        run: bun run test
+      - name: Workspace check
+        run: bun run check
 
       - name: Coverage
         run: bun run coverage
 
-      - name: Build
-        run: bun run build
-
-      - name: Package dry run
-        run: bun run pack:dry-run
+      - name: Package dry runs
+        run: bun run pack:dry-run:all
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage/
+          path: packages/core/coverage/
 
   integration:
     runs-on: ubuntu-latest

@@ -1,20 +1,35 @@
-name: Publish package
+name: Publish packages
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      package:
+        description: "Which package(s) to publish"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - pi
+          - openclaw
+      dry_run:
+        description: "Dry run only"
+        required: true
+        default: false
+        type: boolean
 
 jobs:
-  publish-npm:
+  publish:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -22,7 +37,7 @@ jobs:
           bun-version: latest
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
@@ -40,17 +55,56 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Verify tag matches package version
+      - name: Verify versions match tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
           TAG_VERSION=${GITHUB_REF_NAME#v}
-          test "$PKG_VERSION" = "$TAG_VERSION"
+          test "$(node -p "require('./package.json').version")" = "$TAG_VERSION"
+          test "$(node -p "require('./packages/core/package.json').version")" = "$TAG_VERSION"
+          test "$(node -p "require('./packages/pi-smart-fetch/package.json').version")" = "$TAG_VERSION"
+          test "$(node -p "require('./packages/openclaw-smart-fetch/package.json').version")" = "$TAG_VERSION"
+          test "$(node -p "require('./packages/openclaw-smart-fetch/openclaw.plugin.json').version")" = "$TAG_VERSION"
 
-      - name: Verify package
-        run: bun run check && bun run pack:dry-run
+      - name: Verify workspace
+        run: bun run check
 
-      - name: Publish to npm
+      - name: Package dry runs
+        run: bun run pack:dry-run:all
+
+      - name: Publish selected package(s)
         env:
           NPM_CONFIG_PROVENANCE: true
-        run: npm publish --provenance --access public
+          SELECTED_PACKAGE: ${{ github.event.inputs.package || 'all' }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+        run: |
+          publish_cmd() {
+            local workspace="$1"
+            if [ "$DRY_RUN" = "true" ]; then
+              npm publish --workspace "$workspace" --access public --provenance --dry-run
+            else
+              npm publish --workspace "$workspace" --access public --provenance
+            fi
+          }
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            publish_cmd packages/pi-smart-fetch
+            publish_cmd packages/openclaw-smart-fetch
+            exit 0
+          fi
+
+          case "$SELECTED_PACKAGE" in
+            all)
+              publish_cmd packages/pi-smart-fetch
+              publish_cmd packages/openclaw-smart-fetch
+              ;;
+            pi)
+              publish_cmd packages/pi-smart-fetch
+              ;;
+            openclaw)
+              publish_cmd packages/openclaw-smart-fetch
+              ;;
+            *)
+              echo "Unknown package selection: $SELECTED_PACKAGE" >&2
+              exit 1
+              ;;
+          esac

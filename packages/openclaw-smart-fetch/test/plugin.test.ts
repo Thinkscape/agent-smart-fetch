@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import plugin, { resolvePluginDefaults } from "../index";
+import plugin, { resolvePluginDefaults } from "../src/index";
 import type { ToolRegistrationApi } from "../src/types";
 
 describe("resolvePluginDefaults", () => {

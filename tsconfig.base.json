@@ -3,13 +3,18 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "smart-fetch-core": ["packages/core/src/index.ts"],
+      "smart-fetch-core/*": ["packages/core/src/*"]
+    },
     "lib": ["ES2022", "DOM"],
     "strict": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
     "types": ["bun"]
-  },
-  "include": ["index.ts", "src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+  }
 }

@@ -11,7 +11,14 @@
     }
   },
   "files": {
-    "includes": ["**", "!dist", "!coverage", "!node_modules"]
+    "includes": [
+      "**",
+      "!dist",
+      "!coverage",
+      "!packages/*/dist",
+      "!packages/*/coverage",
+      "!node_modules"
+    ]
   },
   "javascript": {
     "formatter": {

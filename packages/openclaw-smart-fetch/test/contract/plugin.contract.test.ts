@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import plugin from "../../index";
+import plugin from "../../src/index";
 import type { ToolRegistrationApi } from "../../src/types";
 
 describe("plugin contract", () => {

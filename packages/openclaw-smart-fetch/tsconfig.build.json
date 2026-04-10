@@ -6,9 +6,10 @@
     "declaration": true,
     "emitDeclarationOnly": false,
     "outDir": "dist",
-    "rootDir": ".",
-    "sourceMap": true
+    "rootDir": "src",
+    "sourceMap": true,
+    "paths": {}
   },
-  "include": ["index.ts", "src/**/*.ts"],
-  "exclude": ["test/**/*", "scripts/**/*", "dist/**/*"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["test/**/*", "dist/**/*"]
 }

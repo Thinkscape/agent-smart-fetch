@@ -39,6 +39,8 @@ type BatchRenderDetails = {
   started?: boolean;
 };
 
+const SPINNER_INTERVAL_MS = 100;
+
 function truncateMiddle(value: string, width: number): string {
   if (width <= 0) return "";
   if (value.length <= width) return value.padEnd(width, " ");
@@ -113,6 +115,7 @@ function renderBatchProgressText(
     bold(value: string): string;
     fg(color: string, value: string): string;
   },
+  spinnerOffset = 0,
 ): string {
   const summary = [
     theme.fg("toolTitle", theme.bold("batch_web_fetch ")),
@@ -135,7 +138,11 @@ function renderBatchProgressText(
   );
 
   const rows = snapshot.items.map((item, index) => {
-    const glyph = renderStatusGlyph(item, snapshot.completed + index, theme);
+    const glyph = renderStatusGlyph(
+      item,
+      snapshot.completed + index + spinnerOffset,
+      theme,
+    );
     const url = theme.fg("accent", truncateMiddle(item.url, urlWidth));
     const statusColor =
       item.status === "error"
@@ -159,31 +166,88 @@ function renderBatchProgressText(
   return [summary, ...rows].join("\n");
 }
 
-function createResponsiveBatchComponent(
-  details: BatchRenderDetails,
-  expanded: boolean,
-  theme: {
-    bold(value: string): string;
-    fg(color: string, value: string): string;
-  },
-) {
-  const text = new Text("", 0, 0);
+class BatchProgressComponent {
+  private text = new Text("", 0, 0);
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private spinnerTick = 0;
 
-  return {
-    render(width: number) {
-      const snapshot = details.batchProgress;
-      if (!snapshot) {
-        text.setText(theme.fg("muted", "No batch progress available."));
-        return text.render(width);
-      }
+  constructor(
+    private details: BatchRenderDetails,
+    private expanded: boolean,
+    private theme: {
+      bold(value: string): string;
+      fg(color: string, value: string): string;
+    },
+    private requestRender: () => void,
+  ) {
+    this.syncTimer();
+  }
 
-      text.setText(renderBatchProgressText(snapshot, width, expanded, theme));
-      return text.render(width);
+  update(
+    details: BatchRenderDetails,
+    expanded: boolean,
+    theme: {
+      bold(value: string): string;
+      fg(color: string, value: string): string;
     },
-    invalidate() {
-      text.invalidate();
-    },
-  };
+  ) {
+    this.details = details;
+    this.expanded = expanded;
+    this.theme = theme;
+    this.text.invalidate();
+    this.syncTimer();
+  }
+
+  private hasActiveItems() {
+    const items = this.details.batchProgress?.items ?? [];
+    return items.some(
+      (item) =>
+        item.status === "queued" ||
+        item.status === "fetching" ||
+        item.status === "extracting",
+    );
+  }
+
+  private syncTimer() {
+    if (this.hasActiveItems()) {
+      if (this.timer) return;
+      this.timer = setInterval(() => {
+        this.spinnerTick += 1;
+        this.text.invalidate();
+        this.requestRender();
+      }, SPINNER_INTERVAL_MS);
+      return;
+    }
+
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+
+  render(width: number) {
+    const snapshot = this.details.batchProgress;
+    if (!snapshot) {
+      this.text.setText(this.theme.fg("muted", "No batch progress available."));
+      return this.text.render(width);
+    }
+
+    const spinnerOffset = this.spinnerTick * Math.max(1, snapshot.items.length);
+    this.text.setText(
+      renderBatchProgressText(
+        snapshot,
+        width,
+        this.expanded,
+        this.theme,
+        spinnerOffset,
+      ),
+    );
+    return this.text.render(width);
+  }
+
+  invalidate() {
+    this.text.invalidate();
+  }
 }
 
 export default function piSmartFetchExtension(pi: ExtensionAPI) {
@@ -314,12 +378,18 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       return new Text(text, 0, 0);
     },
 
-    renderResult(result, { expanded }, theme) {
-      return createResponsiveBatchComponent(
-        (result.details as BatchRenderDetails | undefined) ?? {},
-        expanded,
-        theme,
-      );
+    renderResult(result, { expanded }, theme, context) {
+      const details = (result.details as BatchRenderDetails | undefined) ?? {};
+      const component = context.lastComponent;
+
+      if (component instanceof BatchProgressComponent) {
+        component.update(details, expanded, theme);
+        return component;
+      }
+
+      return new BatchProgressComponent(details, expanded, theme, () => {
+        context.invalidate();
+      });
     },
   });
 }

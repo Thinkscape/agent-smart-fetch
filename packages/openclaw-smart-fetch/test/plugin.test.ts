@@ -9,6 +9,7 @@ describe("resolvePluginDefaults", () => {
         browser: "firefox_147",
         maxChars: 1000,
         removeImages: true,
+        batchConcurrency: 3,
       }),
     ).toEqual({
       browser: "firefox_147",
@@ -17,37 +18,46 @@ describe("resolvePluginDefaults", () => {
       timeoutMs: 15000,
       removeImages: true,
       includeReplies: "extractors",
+      batchConcurrency: 3,
     });
   });
 });
 
 describe("plugin registration", () => {
-  it("registers the smart_fetch tool and logs the configured default profile", () => {
-    let registeredTool: { name: string } | undefined;
+  it("registers smart_fetch and batch_smart_fetch tools and logs the configured defaults", () => {
+    const registeredTools: Array<{ name: string }> = [];
     const api: ToolRegistrationApi = {
-      pluginConfig: { browser: "firefox_147", os: "linux" },
+      pluginConfig: {
+        browser: "firefox_147",
+        os: "linux",
+        batchConcurrency: 6,
+      },
       registerTool(definition) {
-        registeredTool = definition;
+        registeredTools.push(definition);
       },
       logger: { info: mock(() => {}) },
     };
 
     plugin.register(api);
 
-    expect(registeredTool?.name).toBe("smart_fetch");
+    expect(registeredTools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(["smart_fetch", "batch_smart_fetch"]),
+    );
     expect(api.logger.info).toHaveBeenCalledWith(
-      "smart_fetch tool registered (default: firefox_147/linux)",
+      "smart_fetch tools registered (default: firefox_147/linux, batch concurrency: 6)",
     );
   });
 
-  it("surfaces invalid URL errors from the tool execution path", async () => {
+  it("surfaces invalid URL errors from the smart_fetch execution path", async () => {
     let registeredTool:
       | Parameters<ToolRegistrationApi["registerTool"]>[0]
       | undefined;
 
     const api: ToolRegistrationApi = {
       registerTool(definition) {
-        registeredTool = definition;
+        if (definition.name === "smart_fetch") {
+          registeredTool = definition;
+        }
       },
       logger: { info: () => {} },
     };
@@ -61,5 +71,34 @@ describe("plugin registration", () => {
 
     expect(response?.isError).toBe(true);
     expect(response?.content[0]?.text).toContain("Invalid URL");
+  });
+
+  it("returns labeled per-item results from batch_smart_fetch", async () => {
+    let registeredTool:
+      | Parameters<ToolRegistrationApi["registerTool"]>[0]
+      | undefined;
+
+    const api: ToolRegistrationApi = {
+      registerTool(definition) {
+        if (definition.name === "batch_smart_fetch") {
+          registeredTool = definition;
+        }
+      },
+      logger: { info: () => {} },
+    };
+
+    plugin.register(api);
+
+    expect(registeredTool).toBeDefined();
+    const response = await registeredTool?.execute("tool-call-2", {
+      requests: [{ url: "not-a-url" }],
+    });
+
+    expect(response?.isError).toBeUndefined();
+    expect(response?.content[0]?.text).toContain("> Requests: 1");
+    expect(response?.content[0]?.text).toContain("## [1/1] not-a-url");
+    expect(response?.content[0]?.text).toContain(
+      "> Error: Invalid URL: not-a-url",
+    );
   });
 });

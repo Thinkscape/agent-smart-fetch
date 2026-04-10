@@ -1,7 +1,7 @@
 {
   "id": "smart-fetch",
   "name": "Smart Fetch",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Clean web content extraction with browser-grade TLS fingerprinting. Uses wreq-js (Rust native bindings) for anti-bot bypass and Defuddle for superior content extraction.",
   "configSchema": {
     "type": "object",
@@ -36,6 +36,11 @@
         "type": ["boolean", "string"],
         "description": "Include replies/comments: 'extractors' (default), true, or false",
         "default": "extractors"
+      },
+      "batchConcurrency": {
+        "type": "number",
+        "description": "Maximum number of batch_smart_fetch requests to run concurrently (default: 8)",
+        "default": 8
       }
     },
     "additionalProperties": false

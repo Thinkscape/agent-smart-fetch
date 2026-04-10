@@ -1,7 +1,10 @@
 import { Type } from "@sinclair/typebox";
 import {
+  buildBatchFetchResponseText,
   buildFetchResponseText,
   createBaseFetchToolParameterProperties,
+  createBatchFetchToolParameterProperties,
+  executeBatchFetchToolCall,
   executeFetchToolCall,
   type FetchResult,
   isError,
@@ -59,8 +62,36 @@ const plugin = {
       },
     });
 
+    api.registerTool({
+      name: "batch_smart_fetch",
+      description: [
+        "Fetch multiple URLs with browser-grade TLS fingerprinting and clean readable extraction.",
+        "Each request item accepts the same parameters as smart_fetch and runs with bounded concurrency.",
+        "Returns clearly labeled per-item results with full content for successes and bot-friendly per-item errors for failures.",
+        "Does NOT execute JavaScript — use the browser tool for JS-heavy SPAs.",
+      ].join(" "),
+      parameters: Type.Object(
+        createBatchFetchToolParameterProperties(defaults),
+      ),
+
+      async execute(_toolCallId: string, params: Record<string, unknown>) {
+        const result = await executeBatchFetchToolCall(params, defaults, {
+          batchConcurrency: defaults.batchConcurrency,
+        });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: buildBatchFetchResponseText(result, { verbose: true }),
+            },
+          ],
+        };
+      },
+    });
+
     api.logger.info(
-      `smart_fetch tool registered (default: ${defaults.browser}/${defaults.os})`,
+      `smart_fetch tools registered (default: ${defaults.browser}/${defaults.os}, batch concurrency: ${defaults.batchConcurrency})`,
     );
   },
 };

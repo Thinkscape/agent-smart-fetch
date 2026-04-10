@@ -185,6 +185,24 @@ describe("createDefuddleFetch", () => {
     });
   });
 
+  it("emits coarse status updates while fetching and extracting", async () => {
+    const dependencies = createDependencies();
+    const defuddleFetch = createDefuddleFetch(dependencies);
+    const statuses: string[] = [];
+
+    const result = await defuddleFetch(
+      { url: "https://example.com/article" },
+      {
+        onStatusChange(status) {
+          statuses.push(status);
+        },
+      },
+    );
+
+    expect(isError(result)).toBe(false);
+    expect(statuses).toEqual(["fetching", "extracting", "done"]);
+  });
+
   it("converts markdown output to plain text when format=text", async () => {
     const dependencies = createDependencies({
       defuddle: mock(

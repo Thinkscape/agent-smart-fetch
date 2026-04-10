@@ -1,6 +1,12 @@
 export type OutputFormat = "markdown" | "html" | "text" | "json";
 export type FingerprintOs = "windows" | "macos" | "linux" | "android" | "ios";
 export type IncludeRepliesOption = boolean | "extractors";
+export type BatchFetchItemStatus =
+  | "queued"
+  | "fetching"
+  | "extracting"
+  | "done"
+  | "error";
 
 export interface FetchOptions {
   url: string;
@@ -31,6 +37,40 @@ export interface FetchResult {
 
 export interface FetchError {
   error: string;
+}
+
+export interface BatchFetchItemProgress {
+  index: number;
+  url: string;
+  status: BatchFetchItemStatus;
+  progress: number;
+  error?: string;
+}
+
+export interface BatchFetchItemResult {
+  index: number;
+  request: FetchOptions;
+  status: "done" | "error";
+  progress: number;
+  result?: FetchResult;
+  error?: string;
+}
+
+export interface BatchFetchProgressSnapshot {
+  items: BatchFetchItemProgress[];
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
+  batchConcurrency: number;
+}
+
+export interface BatchFetchResult {
+  items: BatchFetchItemResult[];
+  total: number;
+  succeeded: number;
+  failed: number;
+  batchConcurrency: number;
 }
 
 export interface ExtractedContent {
@@ -75,6 +115,7 @@ export interface FetchToolConfig {
   os?: string;
   removeImages?: boolean;
   includeReplies?: IncludeRepliesOption;
+  batchConcurrency?: number;
 }
 
 export interface FetchToolDefaults {
@@ -84,4 +125,9 @@ export interface FetchToolDefaults {
   os: string;
   removeImages: boolean;
   includeReplies: IncludeRepliesOption;
+  batchConcurrency: number;
+}
+
+export interface FetchExecutionHooks {
+  onStatusChange?(status: Exclude<BatchFetchItemStatus, "queued">): void;
 }

@@ -27,12 +27,14 @@ import { getLatestChromeProfile as getLatestChromeProfileFrom } from "./profiles
 import type {
   FetchDependencies,
   FetchError,
+  FetchExecutionHooks,
   FetchOptions,
   FetchResult,
   OutputFormat,
 } from "./types";
 
 export {
+  DEFAULT_BATCH_CONCURRENCY,
   DEFAULT_BROWSER,
   DEFAULT_INCLUDE_REPLIES,
   DEFAULT_MAX_CHARS,
@@ -127,6 +129,7 @@ export function createDefuddleFetch(
 ) {
   return async function defuddleFetch(
     opts: FetchOptions,
+    hooks: FetchExecutionHooks = {},
   ): Promise<FetchResult | FetchError> {
     const browser = opts.browser ?? DEFAULT_BROWSER;
     const os = opts.os ?? DEFAULT_OS;
@@ -165,6 +168,7 @@ export function createDefuddleFetch(
       fetchOptions.proxy = opts.proxy;
     }
 
+    hooks.onStatusChange?.("fetching");
     const response = await dependencies.fetch(opts.url, fetchOptions);
 
     if (!response.ok) {
@@ -183,7 +187,7 @@ export function createDefuddleFetch(
         return { error: `Not a JSON response (content-type: ${contentType})` };
       }
 
-      return buildJsonResult(
+      const result = buildJsonResult(
         opts,
         finalUrl,
         rawBody,
@@ -192,10 +196,14 @@ export function createDefuddleFetch(
         browser,
         os,
       );
+      if (!isError(result)) {
+        hooks.onStatusChange?.("done");
+      }
+      return result;
     }
 
     if (jsonResponse) {
-      return buildJsonResult(
+      const result = buildJsonResult(
         opts,
         finalUrl,
         rawBody,
@@ -204,12 +212,17 @@ export function createDefuddleFetch(
         browser,
         os,
       );
+      if (!isError(result)) {
+        hooks.onStatusChange?.("done");
+      }
+      return result;
     }
 
     if (!HTML_CONTENT_TYPES.some((value) => contentType.includes(value))) {
       return { error: `Not an HTML page (content-type: ${contentType})` };
     }
 
+    hooks.onStatusChange?.("extracting");
     const document = parseLinkedomHTML(rawBody, finalUrl);
     const extracted = await dependencies.defuddle(document, finalUrl, {
       markdown: format !== "html",
@@ -241,7 +254,7 @@ export function createDefuddleFetch(
     const normalizedContent =
       format === "text" ? markdownToText(extractedContent) : extractedContent;
 
-    return {
+    const result = {
       url: opts.url,
       finalUrl,
       title: extracted.title ?? "",
@@ -254,6 +267,9 @@ export function createDefuddleFetch(
       browser,
       os,
     };
+
+    hooks.onStatusChange?.("done");
+    return result;
   };
 }
 

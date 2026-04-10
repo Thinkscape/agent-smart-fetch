@@ -1,54 +1,157 @@
 # Plan
 
 ## Context
-- Investigate better support for host-served markdown in the core extraction pipeline.
-- User observed that `https://docs.openclaw.ai/plugins/memory-wiki` serves proper markdown when the request includes `Accept: text/x-markdown`.
-- Need to assess whether `packages/core/src/extract.ts` should advertise markdown in `Accept`, detect markdown responses, and short-circuit before Defuddle.
-- Need to add the OpenClaw docs site to integration coverage and understand what changes in behavior.
-- Current live behavior:
-  - With the existing default `Accept` (`text/html,...,*/*`), the OpenClaw docs page responds with `text/html` and the current Defuddle path succeeds (`title: "Memory Wiki"`, `wordCount: 1128`, content length ≈ 9.4k chars).
-  - With `Accept: text/x-markdown` or `Accept: text/markdown`, the same page responds with `content-type: text/markdown; charset=utf-8` and current code fails with `No content extracted...` because it still routes that response through Defuddle.
-  - Important negotiation detail: on this host, simply appending markdown later in the `Accept` list does **not** switch the response to markdown; markdown has to be the first/explicit preferred media type to flip Mintlify into its raw markdown endpoint.
-  - Direct content comparison for this page:
-    - Server-served markdown is longer (≈ 10.9k chars) because it includes Mintlify-added preamble/noise: a `Documentation Index` blockquote, an `<AgentInstructions>` block, duplicate `# Memory Wiki` headings, relative links, a `Related docs` section, and a `Built with Mintlify` footer.
-    - Our current HTML→Defuddle path removes that wrapper noise, deduplicates the title, keeps the main doc body, rewrites at least some relative links to absolute URLs, and returns cleaner agent-facing markdown.
+- Add batch fetch support built in the shared core so callers can invoke something like `batch_web_fetch([...])`, where each item accepts the same request parameters as the existing single-item fetch tool.
+- The batch result needs to map each result clearly back to its input URL/item and include bot-friendly per-item error information.
+- `pi-smart-fetch` should provide a richer TUI experience for batch execution, including per-item progress rows with truncated URLs, a small loading indicator, a one-word status, and small progress bars where possible.
+- `openclaw-smart-fetch` does not need live progress detail; a simpler started/final-results behavior is likely enough.
+- README/tool docs/examples/synopsis text need to be updated across the repo.
+
+## Findings so far
+- Core today only exposes the single-item path:
+  - `packages/core/src/tool.ts` defines a single-request schema via `createBaseFetchToolParameterProperties()` and a single executor via `executeFetchToolCall()`.
+  - `packages/core/src/extract.ts` contains the actual fetch/extract pipeline (`createDefuddleFetch` / `defuddleFetch`).
+- Current result model is single-item only:
+  - `packages/core/src/types.ts` defines `FetchOptions`, `FetchResult`, `FetchError`, and `FetchToolConfig`, but no batch request/result/progress types.
+  - `packages/core/src/format.ts` renders one result into text via `buildFetchResponseText()`.
+- Adapters are thin wrappers around the shared core:
+  - `packages/pi-smart-fetch/src/index.ts` registers `web_fetch`, supports `verbose`, and has access to `onUpdate` plus pi custom render hooks.
+  - `packages/openclaw-smart-fetch/src/index.ts` registers `smart_fetch` and currently only returns a final payload; its local API/types do not expose a streaming callback the way pi does.
+- Existing config/default plumbing already has natural insertion points for batch concurrency:
+  - `packages/pi-smart-fetch/src/settings.ts` resolves pi-specific defaults from settings files; this is the right place to add something like `smartFetchDefaultBatchConcurrency` (and likely `webFetchDefaultBatchConcurrency` as a compatibility alias).
+  - `packages/pi-smart-fetch/test/unit/pi-settings.test.ts` already verifies settings precedence/validation.
+  - `packages/openclaw-smart-fetch/openclaw.plugin.json` already exposes shared defaults (`maxChars`, `timeoutMs`, etc.); it can add `batchConcurrency` with a default of `8`.
+- Existing tests and docs are organized cleanly by package:
+  - core unit/integration tests under `packages/core/test/**`
+  - pi unit tests under `packages/pi-smart-fetch/test/unit/**`
+  - OpenClaw tests under `packages/openclaw-smart-fetch/test/**`
+  - README files at root plus each package README.
+- pi supports streaming tool updates and custom `renderCall` / `renderResult` rendering; the bundled pi docs explicitly recommend handling `isPartial` in custom renderers. This looks like the right hook for the per-item batch TUI.
+- `wreq-js`'s published `RequestInit` typings expose transport/browser/session/timeout settings, but I did not find an obvious progress/status callback in its public type surface yet. Per your preference, v1 can fall back to our own coarse statuses (`queued` / `fetching` / `extracting` / `done` / `error`) if deeper inspection still does not uncover native phase callbacks.
+- For richer pi rendering, we will likely need to introduce a small custom renderer implementation in `packages/pi-smart-fetch/src/index.ts`; if that renderer uses `@mariozechner/pi-tui` primitives directly, package metadata may also need to be updated accordingly.
 
 ## Approach
-- Inspect the current fetch/extract pipeline, test coverage, and any existing markdown/text handling.
-- Verify the live OpenClaw docs endpoint behavior with and without markdown-focused `Accept` headers.
-- Recommend a concrete implementation approach for markdown response detection and early return, reusing existing formatting/truncation helpers where possible.
-- Extend integration tests to cover the real OpenClaw docs case and document expected assertions.
-- Keep HTML as a viable fallback path; if markdown is advertised in `Accept`, do so without breaking existing HTML-first extraction for sites that only behave well with HTML.
-- Account for the fact that Mintlify appears to key off `Accept` ordering, not just `q` values, when deciding between HTML and raw markdown.
+- Extend the core with batch-aware request/response helpers rather than implementing batching separately in each adapter.
+- Reuse the existing single-fetch execution path for each item, so batch mode fans out over the already-tested `executeFetchToolCall` / `defuddleFetch` behavior instead of duplicating extraction logic.
+- Add batch-specific schema/types/formatting helpers in core so both adapters can share the same item result model, progress model, and final textual output.
+- Add shared `batchConcurrency` support to config/default resolution, exposed as a config/setting with a default of `8`.
+- In pi:
+  - register a new `batch_web_fetch` tool alongside `web_fetch`
+  - resolve runtime batch concurrency from pi settings
+  - stream partial updates during execution using `onUpdate`
+  - add custom renderers so the TUI can show compact per-item rows with truncated URLs, status/spinner, and per-item progress indication
+  - if `wreq-js` cannot surface low-level phases, use coarse lifecycle stages generated by our own scheduler/executor.
+- In OpenClaw:
+  - register `batch_smart_fetch`
+  - resolve bounded concurrency from plugin config
+  - skip live progress UI and return a clear final mapping of URL → result/error with full content for successful items
+- Proposed pi batch TUI format:
+  - compact header line with batch summary, for example: `batch_web_fetch 12 urls (concurrency 8)`
+  - one row per item, preserving input order
+  - row shape: `<spinner-or-check> <truncated-url> <status> <small-progress-bar>`
+  - width policy: use the render width reported by pi at draw time, and allocate about 80% of the available row width to the combined URL/progress area so truncation adapts to the actual terminal size
+  - concrete layout target:
+    - reserve a narrow fixed region for the spinner/check glyph and one-word status
+    - let the remaining width drive URL truncation and progress-bar length responsively
+    - within that responsive region, bias most space toward the URL while keeping a visible progress bar
+  - example in-flight rows:
+    - `⠋ https://example.com/article... fetching   [███░░░░░░]`
+    - `⠙ https://news.ycombinator.com/... extracting [███████░░░]`
+  - example finished rows:
+    - `✓ https://example.com/article... done       [██████████]`
+    - `✗ https://bad.example/...     error      [██████████]`
+  - status words for v1: `queued`, `fetching`, `extracting`, `done`, `error`
+  - progress mapping for v1 if `wreq-js` has no deeper callbacks:
+    - `queued` = 0%
+    - `fetching` = ~35%
+    - `extracting` = ~75%
+    - `done` / `error` = 100%
+  - expanded view can optionally show the full URL plus any per-item bot-friendly error string beneath the row.
+- Update root/package README content, examples, and pi prompt snippet/tool synopsis text to document both single and batch tools.
 
 ## Files to modify
-- Likely `packages/core/src/extract.ts`
-- Likely `packages/core/src/constants.ts`
-- Likely `packages/core/test/unit/extract.unit.test.ts`
-- Likely `packages/core/test/integration/extract.integration.test.ts`
+- `packages/core/src/tool.ts`
+- `packages/core/src/types.ts`
+- `packages/core/src/format.ts`
+- `packages/core/src/index.ts`
+- Possibly `packages/core/src/extract.ts` if batch execution/progress hooks belong near the fetch pipeline
+- Possibly a new core helper/test file for batch execution or formatting if the logic becomes too large for current files
+- `packages/core/test/unit/extract.unit.test.ts`
+- `packages/core/test/unit/format.test.ts`
+- `packages/pi-smart-fetch/src/index.ts`
+- `packages/pi-smart-fetch/src/settings.ts`
+- `packages/pi-smart-fetch/test/unit/pi-extension.test.ts`
+- `packages/pi-smart-fetch/test/unit/pi-settings.test.ts`
+- Possibly `packages/pi-smart-fetch/package.json` if the custom renderer needs an explicit TUI dependency declaration
+- `packages/openclaw-smart-fetch/src/index.ts`
+- `packages/openclaw-smart-fetch/src/types.ts` (if the plugin definition type needs batch-result details or richer tool definitions)
+- `packages/openclaw-smart-fetch/openclaw.plugin.json`
+- `packages/openclaw-smart-fetch/test/plugin.test.ts`
+- `packages/openclaw-smart-fetch/test/contract/plugin.contract.test.ts`
+- `README.md`
+- `packages/core/README.md`
+- `packages/pi-smart-fetch/README.md`
+- `packages/openclaw-smart-fetch/README.md`
 
 ## Reuse
-- `packages/core/src/extract.ts` — existing fetch pipeline, content-type gate, Defuddle invocation, and response shaping. Note: it already treats `text/markdown` as an allowed content type but does not branch on it.
-- `packages/core/src/format.ts` — existing `markdownToText` and `truncateContent` helpers for normalization/truncation.
-- `packages/core/src/constants.ts` — default `Accept` / `Accept-Language` headers.
-- `packages/core/test/unit/extract.unit.test.ts` — existing mocked fetch/Defuddle tests that can be extended to verify header negotiation and markdown short-circuit behavior.
-- Existing result shaping in `extract.ts` already returns empty-string defaults for metadata, which is likely the simplest path for raw markdown responses unless we deliberately add markdown metadata parsing.
+- `packages/core/src/tool.ts`
+  - `createBaseFetchToolParameterProperties()` for the per-item schema surface
+  - `executeFetchToolCall()` for the actual single-item execution logic to reuse inside batch fan-out
+- `packages/core/src/extract.ts`
+  - `defuddleFetch()` as the canonical fetch/extract implementation for each batch item
+- `packages/core/src/format.ts`
+  - `buildFetchResponseText()` as the existing single-result formatter that batch formatting can wrap/reuse per item
+  - `truncateContent()` and metadata helpers if batch summaries need compact previews
+- `packages/pi-smart-fetch/src/index.ts`
+  - existing settings/default resolution and `verbose` handling
+  - existing pi tool registration shape with `onUpdate`
+- pi extension docs in `node_modules/@mariozechner/pi-coding-agent/docs/extensions.md`
+  - confirm support for streaming partial tool results and custom `renderResult(..., { isPartial })`
 
 ## Steps
-- [x] Confirm how the OpenClaw docs endpoint responds to different `Accept` headers and content types.
-- [ ] Identify where to broaden `Accept` negotiation and how to detect markdown responses safely.
-- [ ] Define how markdown responses should map to existing `format` options (`markdown`, `html`, `text`).
-- [ ] Add/update unit tests for markdown content-type handling and early-return behavior.
-- [ ] Add/update integration tests for the OpenClaw docs endpoint.
-
-## Open questions
-- Should the default `Accept` header be changed globally now, or should markdown short-circuit support land first while keeping HTML-first negotiation unchanged?
-- If raw markdown is returned, what should `format: "html"` do?
-- Is it acceptable for the first markdown-path implementation to leave metadata mostly empty (except perhaps title if trivially derivable), rather than introducing a markdown metadata parser now?
+- [x] Inspect current core/adapters/tests/docs to see how single-item fetch is wired today.
+- [ ] Define shared batch types in core:
+  - per-item input shape using the same parameter surface as single fetch
+  - per-item success/error shape
+  - per-item progress/status shape for pi rendering
+  - overall batch result shape and ordering guarantees
+  - shared `batchConcurrency` config/default shape
+- [ ] Add core batch schema/execution helpers that fan out over the existing single-item executor.
+- [ ] Implement bounded-concurrency scheduling in core, with a default of `8` and adapter-supplied overrides from pi settings / OpenClaw plugin config.
+- [ ] Add core batch text formatting so final outputs clearly label each URL/item, preserve input ordering, include full successful content, and attach bot-friendly per-item errors.
+- [ ] Add `batch_web_fetch` to pi, including prompt synopsis text and runtime settings resolution.
+- [ ] Add pi partial-update + custom renderer support for the proposed per-item progress layout:
+  - compact batch header
+  - ordered per-item rows
+  - spinner/check/error glyph
+  - truncated URL column sized from the width reported by pi at render time
+  - one-word status column
+  - small ASCII/UTF progress bar
+  - use about 80% of available width for the responsive URL/progress region
+  - expanded per-item error/details view when relevant
+- [ ] Confirm whether `wreq-js` can expose finer transport phases; if not, use coarse internal statuses for pi progress.
+- [ ] Add `batch_smart_fetch` to OpenClaw with config-driven bounded concurrency and simple started/final reporting.
+- [ ] Extend unit/contract tests for new tool schemas, settings/config resolution, execution behavior, ordering, concurrency, and per-item errors.
+- [ ] Update README files and example outputs for both single and batch tools, including config docs for batch concurrency.
 
 ## Verification
-- Run/update unit tests for `packages/core/test/unit/extract.unit.test.ts`.
-- Run/update integration tests for `packages/core/test/integration/extract.integration.test.ts` with `RUN_INTEGRATION=1`.
-- Manually compare the OpenClaw docs response with default vs markdown-aware `Accept` headers to validate the expected extraction path.
-- Re-check that the existing integration suite still passes for HTML-first sites after any `Accept` header changes.
-- For OpenClaw specifically, compare whether the new markdown short-circuit should preserve raw host instructions/footer or apply light normalization before returning.
+- Core:
+  - run `bun run test:core`
+  - add unit coverage for mixed batch success/error cases, ordering, formatting, bounded-concurrency scheduling, and progress/status bookkeeping
+- pi:
+  - run `bun run test:pi`
+  - verify the registered schema includes `batch_web_fetch`
+  - verify pi settings resolve batch concurrency correctly and that partial updates/custom rendering can consume the batch details shape
+- OpenClaw:
+  - run `bun run test:openclaw`
+  - verify contract tests for `batch_smart_fetch`, plugin-config defaulting for `batchConcurrency`, and final response mapping
+- Repo-wide:
+  - run `bun run test`
+  - run `bun run build`
+  - smoke-check docs/examples for consistency of tool names, parameter lists, config defaults, and example outputs
+
+## Decisions captured
+- OpenClaw tool name: `batch_smart_fetch`
+- Batch execution policy: bounded concurrency, exposed as config/settings, default `8`
+- Final batch output: full content for successful items
+- pi progress fallback: use coarse internal statuses if `wreq-js` does not expose transport-phase callbacks

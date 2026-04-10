@@ -18,6 +18,7 @@ describe("resolvePiSmartFetchSettings", () => {
         smartFetchDefaultOs: "windows",
         smartFetchDefaultRemoveImages: false,
         smartFetchDefaultIncludeReplies: "extractors",
+        smartFetchDefaultBatchConcurrency: 8,
       },
       {
         smartFetchVerboseByDefault: false,
@@ -27,6 +28,7 @@ describe("resolvePiSmartFetchSettings", () => {
         smartFetchDefaultOs: "linux",
         smartFetchDefaultRemoveImages: true,
         smartFetchDefaultIncludeReplies: true,
+        smartFetchDefaultBatchConcurrency: 3,
       },
     );
 
@@ -38,6 +40,7 @@ describe("resolvePiSmartFetchSettings", () => {
       os: "linux",
       removeImages: true,
       includeReplies: true,
+      batchConcurrency: 3,
     });
   });
 
@@ -51,6 +54,7 @@ describe("resolvePiSmartFetchSettings", () => {
         smartFetchDefaultOs: "beos",
         smartFetchDefaultRemoveImages: "no",
         smartFetchDefaultIncludeReplies: "all",
+        smartFetchDefaultBatchConcurrency: 0,
       },
       {},
     );
@@ -63,6 +67,7 @@ describe("resolvePiSmartFetchSettings", () => {
       os: undefined,
       removeImages: undefined,
       includeReplies: undefined,
+      batchConcurrency: undefined,
     });
   });
 
@@ -71,6 +76,7 @@ describe("resolvePiSmartFetchSettings", () => {
       {
         webFetchVerboseByDefault: true,
         webFetchDefaultMaxChars: 2000,
+        webFetchDefaultBatchConcurrency: 5,
       },
       {},
     );
@@ -83,6 +89,7 @@ describe("resolvePiSmartFetchSettings", () => {
       os: undefined,
       removeImages: undefined,
       includeReplies: undefined,
+      batchConcurrency: 5,
     });
   });
 });
@@ -107,6 +114,7 @@ describe("loadPiSmartFetchSettings", () => {
           smartFetchDefaultOs: "windows",
           smartFetchDefaultRemoveImages: false,
           smartFetchDefaultIncludeReplies: "extractors",
+          smartFetchDefaultBatchConcurrency: 8,
         },
         null,
         2,
@@ -119,6 +127,7 @@ describe("loadPiSmartFetchSettings", () => {
           smartFetchVerboseByDefault: false,
           smartFetchDefaultBrowser: "firefox_147",
           smartFetchDefaultRemoveImages: true,
+          smartFetchDefaultBatchConcurrency: 4,
         },
         null,
         2,
@@ -133,6 +142,7 @@ describe("loadPiSmartFetchSettings", () => {
       os: "windows",
       removeImages: true,
       includeReplies: "extractors",
+      batchConcurrency: 4,
     });
   });
 });

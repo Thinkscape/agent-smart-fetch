@@ -1,18 +1,34 @@
 import { type TSchema, Type } from "@sinclair/typebox";
 import {
+  DEFAULT_BATCH_CONCURRENCY,
   DEFAULT_BROWSER,
   DEFAULT_INCLUDE_REPLIES,
   DEFAULT_MAX_CHARS,
   DEFAULT_OS,
   DEFAULT_TIMEOUT_MS,
 } from "./constants";
-import { defuddleFetch } from "./extract";
+import { defuddleFetch, isError } from "./extract";
 import type {
+  BatchFetchItemProgress,
+  BatchFetchItemResult,
+  BatchFetchItemStatus,
+  BatchFetchProgressSnapshot,
+  BatchFetchResult,
   FetchError,
+  FetchExecutionHooks,
+  FetchOptions,
   FetchResult,
   FetchToolConfig,
   FetchToolDefaults,
 } from "./types";
+
+function resolveBatchConcurrency(value: number | undefined): number {
+  if (!value || !Number.isFinite(value)) {
+    return DEFAULT_BATCH_CONCURRENCY;
+  }
+
+  return Math.max(1, Math.floor(value));
+}
 
 export function resolveFetchToolDefaults(
   config: FetchToolConfig = {},
@@ -24,6 +40,7 @@ export function resolveFetchToolDefaults(
     os: config.os ?? DEFAULT_OS,
     removeImages: config.removeImages ?? false,
     includeReplies: config.includeReplies ?? DEFAULT_INCLUDE_REPLIES,
+    batchConcurrency: resolveBatchConcurrency(config.batchConcurrency),
   };
 }
 
@@ -87,11 +104,28 @@ export function createBaseFetchToolParameterProperties(
   };
 }
 
-export async function executeFetchToolCall(
+export function createBatchFetchToolParameterProperties(
+  defaults: FetchToolDefaults,
+): Record<string, TSchema> {
+  return {
+    requests: Type.Array(
+      Type.Object(createBaseFetchToolParameterProperties(defaults), {
+        additionalProperties: false,
+      }),
+      {
+        minItems: 1,
+        description:
+          "Array of fetch requests. Each item accepts the same parameters as the single-item fetch tool.",
+      },
+    ),
+  };
+}
+
+function buildFetchOptionsFromParams(
   params: Record<string, unknown>,
   defaults: FetchToolDefaults,
-): Promise<FetchResult | FetchError> {
-  return defuddleFetch({
+): FetchOptions {
+  return {
     url: params.url as string,
     browser: (params.browser as string) ?? defaults.browser,
     os: (params.os as string) ?? defaults.os,
@@ -105,5 +139,179 @@ export async function executeFetchToolCall(
       defaults.includeReplies,
     proxy: params.proxy as string | undefined,
     timeoutMs: defaults.timeoutMs,
-  });
+  };
+}
+
+export async function executeFetchToolCall(
+  params: Record<string, unknown>,
+  defaults: FetchToolDefaults,
+  hooks: FetchExecutionHooks = {},
+): Promise<FetchResult | FetchError> {
+  return defuddleFetch(buildFetchOptionsFromParams(params, defaults), hooks);
+}
+
+const PROGRESS_BY_STATUS: Record<BatchFetchItemStatus, number> = {
+  queued: 0,
+  fetching: 0.35,
+  extracting: 0.75,
+  done: 1,
+  error: 1,
+};
+
+function createInitialProgressItems(
+  requests: Record<string, unknown>[],
+): BatchFetchItemProgress[] {
+  return requests.map((request, index) => ({
+    index,
+    url:
+      typeof request.url === "string" ? request.url : String(request.url ?? ""),
+    status: "queued",
+    progress: PROGRESS_BY_STATUS.queued,
+  }));
+}
+
+function buildProgressSnapshot(
+  items: BatchFetchItemProgress[],
+  batchConcurrency: number,
+): BatchFetchProgressSnapshot {
+  let completed = 0;
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const item of items) {
+    if (item.status === "done" || item.status === "error") {
+      completed += 1;
+    }
+    if (item.status === "done") {
+      succeeded += 1;
+    }
+    if (item.status === "error") {
+      failed += 1;
+    }
+  }
+
+  return {
+    items: items.map((item) => ({ ...item })),
+    total: items.length,
+    completed,
+    succeeded,
+    failed,
+    batchConcurrency,
+  };
+}
+
+export async function executeBatchFetchToolCall(
+  params: Record<string, unknown>,
+  defaults: FetchToolDefaults,
+  options: {
+    batchConcurrency?: number;
+    onProgress?(snapshot: BatchFetchProgressSnapshot): void;
+    executeItem?(
+      params: Record<string, unknown>,
+      defaults: FetchToolDefaults,
+      hooks?: FetchExecutionHooks,
+    ): Promise<FetchResult | FetchError>;
+  } = {},
+): Promise<BatchFetchResult> {
+  const requests = (
+    (params.requests as Record<string, unknown>[] | undefined) ?? []
+  ).map((request) => request ?? {});
+  const batchConcurrency = resolveBatchConcurrency(
+    options.batchConcurrency ?? defaults.batchConcurrency,
+  );
+  const progressItems = createInitialProgressItems(requests);
+  const results = new Array<BatchFetchItemResult>(requests.length);
+
+  const emitProgress = () => {
+    options.onProgress?.(
+      buildProgressSnapshot(progressItems, batchConcurrency),
+    );
+  };
+
+  const updateProgress = (
+    index: number,
+    status: BatchFetchItemStatus,
+    error?: string,
+  ) => {
+    progressItems[index] = {
+      ...progressItems[index],
+      status,
+      progress: PROGRESS_BY_STATUS[status],
+      ...(error ? { error } : {}),
+    };
+    emitProgress();
+  };
+
+  emitProgress();
+
+  let nextIndex = 0;
+
+  const worker = async () => {
+    while (true) {
+      const index = nextIndex;
+      nextIndex += 1;
+
+      if (index >= requests.length) {
+        return;
+      }
+
+      const request = requests[index] ?? {};
+      const normalizedRequest = buildFetchOptionsFromParams(request, defaults);
+
+      try {
+        const executeItem = options.executeItem ?? executeFetchToolCall;
+        const result = await executeItem(request, defaults, {
+          onStatusChange(status) {
+            if (status === "done") return;
+            updateProgress(index, status);
+          },
+        });
+
+        if (isError(result)) {
+          results[index] = {
+            index,
+            request: normalizedRequest,
+            status: "error",
+            progress: PROGRESS_BY_STATUS.error,
+            error: result.error,
+          };
+          updateProgress(index, "error", result.error);
+          continue;
+        }
+
+        results[index] = {
+          index,
+          request: normalizedRequest,
+          status: "done",
+          progress: PROGRESS_BY_STATUS.done,
+          result,
+        };
+        updateProgress(index, "done");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        results[index] = {
+          index,
+          request: normalizedRequest,
+          status: "error",
+          progress: PROGRESS_BY_STATUS.error,
+          error: message,
+        };
+        updateProgress(index, "error", message);
+      }
+    }
+  };
+
+  const workerCount =
+    requests.length === 0 ? 0 : Math.min(batchConcurrency, requests.length);
+  await Promise.all(Array.from({ length: workerCount }, async () => worker()));
+
+  const finalSnapshot = buildProgressSnapshot(progressItems, batchConcurrency);
+
+  return {
+    items: results,
+    total: finalSnapshot.total,
+    succeeded: finalSnapshot.succeeded,
+    failed: finalSnapshot.failed,
+    batchConcurrency,
+  };
 }

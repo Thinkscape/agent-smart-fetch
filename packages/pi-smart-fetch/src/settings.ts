@@ -23,6 +23,7 @@ interface PiSmartFetchSettings {
   smartFetchDefaultOs?: FingerprintOs;
   smartFetchDefaultRemoveImages?: boolean;
   smartFetchDefaultIncludeReplies?: IncludeRepliesOption;
+  smartFetchDefaultBatchConcurrency?: number;
 }
 
 export interface ResolvedPiSmartFetchSettings extends FetchToolConfig {
@@ -128,6 +129,10 @@ function normalizePiSmartFetchSettings(input: unknown): PiSmartFetchSettings {
     smartFetchDefaultIncludeReplies: readIncludeReplies(source, [
       "smartFetchDefaultIncludeReplies",
     ]),
+    smartFetchDefaultBatchConcurrency: readPositiveNumber(source, [
+      "smartFetchDefaultBatchConcurrency",
+      "webFetchDefaultBatchConcurrency",
+    ]),
   };
 }
 
@@ -156,6 +161,9 @@ export function resolvePiSmartFetchSettings(
     includeReplies:
       project.smartFetchDefaultIncludeReplies ??
       global.smartFetchDefaultIncludeReplies,
+    batchConcurrency:
+      project.smartFetchDefaultBatchConcurrency ??
+      global.smartFetchDefaultBatchConcurrency,
   };
 }
 

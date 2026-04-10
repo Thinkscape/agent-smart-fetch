@@ -2,20 +2,24 @@ import { describe, expect, it } from "bun:test";
 import plugin from "../../src/index";
 import type { ToolRegistrationApi } from "../../src/types";
 
+function registerTools() {
+  const tools: Array<Parameters<ToolRegistrationApi["registerTool"]>[0]> = [];
+
+  plugin.register({
+    registerTool(definition) {
+      tools.push(definition);
+    },
+    logger: { info: () => {} },
+  });
+
+  return tools;
+}
+
 describe("plugin contract", () => {
   it("registers a smart_fetch tool with the expected schema surface", () => {
-    let registeredTool:
-      | Parameters<ToolRegistrationApi["registerTool"]>[0]
-      | undefined;
-
-    const api: ToolRegistrationApi = {
-      registerTool(definition) {
-        registeredTool = definition;
-      },
-      logger: { info: () => {} },
-    };
-
-    plugin.register(api);
+    const registeredTool = registerTools().find(
+      (tool) => tool.name === "smart_fetch",
+    );
 
     expect(registeredTool).toBeDefined();
     expect(registeredTool?.name).toBe("smart_fetch");
@@ -41,17 +45,42 @@ describe("plugin contract", () => {
     expect(formatVariants).toEqual(["markdown", "html", "text", "json"]);
   });
 
-  it("returns an MCP-style error payload for invalid input", async () => {
-    let registeredTool:
-      | Parameters<ToolRegistrationApi["registerTool"]>[0]
-      | undefined;
+  it("registers a batch_smart_fetch tool with a requests array of fetch items", () => {
+    const registeredTool = registerTools().find(
+      (tool) => tool.name === "batch_smart_fetch",
+    );
 
-    plugin.register({
-      registerTool(definition) {
-        registeredTool = definition;
-      },
-      logger: { info: () => {} },
-    });
+    expect(registeredTool).toBeDefined();
+    expect(registeredTool?.description).toContain("bounded concurrency");
+
+    const schema = registeredTool?.parameters as {
+      type?: string;
+      required?: string[];
+      properties?: Record<
+        string,
+        {
+          type?: string;
+          items?: {
+            required?: string[];
+            properties?: Record<string, { type?: string }>;
+          };
+        }
+      >;
+    };
+
+    expect(schema.type).toBe("object");
+    expect(schema.required).toContain("requests");
+    expect(schema.properties?.requests?.type).toBe("array");
+    expect(schema.properties?.requests?.items?.required).toContain("url");
+    expect(schema.properties?.requests?.items?.properties?.url?.type).toBe(
+      "string",
+    );
+  });
+
+  it("returns an MCP-style error payload for invalid single-fetch input", async () => {
+    const registeredTool = registerTools().find(
+      (tool) => tool.name === "smart_fetch",
+    );
 
     expect(registeredTool).toBeDefined();
     const response = await registeredTool?.execute("tool-call-1", {

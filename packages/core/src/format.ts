@@ -1,4 +1,10 @@
-import type { FetchError, FetchResult, OutputFormat } from "./types";
+import type {
+  BatchFetchItemResult,
+  BatchFetchResult,
+  FetchError,
+  FetchResult,
+  OutputFormat,
+} from "./types";
 
 function buildHeader(
   parts: Array<[label: string, value: string | number | undefined]>,
@@ -57,6 +63,51 @@ export function buildFetchResponseText(
     : buildCompactMetadataHeader(result);
 
   return header ? `${header}\n\n${result.content}` : result.content;
+}
+
+function buildBatchItemHeading(
+  item: BatchFetchItemResult,
+  total: number,
+): string {
+  const ordinal = item.index + 1;
+  const url = item.result?.finalUrl ?? item.request.url;
+  return `## [${ordinal}/${total}] ${url}`;
+}
+
+function buildBatchItemText(
+  item: BatchFetchItemResult,
+  total: number,
+  options: { verbose?: boolean } = {},
+): string {
+  const heading = buildBatchItemHeading(item, total);
+
+  if (item.status === "error") {
+    const errorHeader = buildHeader([
+      ["URL", item.request.url],
+      ["Status", "error"],
+      ["Error", item.error ?? "Unknown error"],
+    ]);
+    return `${heading}\n${errorHeader}`;
+  }
+
+  return `${heading}\n${buildFetchResponseText(item.result as FetchResult, options)}`;
+}
+
+export function buildBatchFetchResponseText(
+  result: BatchFetchResult,
+  options: { verbose?: boolean } = {},
+): string {
+  const summary = buildHeader([
+    ["Requests", result.total],
+    ["Succeeded", result.succeeded],
+    ["Failed", result.failed],
+    ["Concurrency", result.batchConcurrency],
+  ]);
+  const items = result.items.map((item) =>
+    buildBatchItemText(item, result.total, options),
+  );
+
+  return [summary, ...items].filter(Boolean).join("\n\n");
 }
 
 export function estimateWordCount(content: string): number {

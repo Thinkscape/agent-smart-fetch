@@ -4,8 +4,8 @@
 
 Better web fetching for agents.
 
-### [Smart Fetch for pi.dev](./packages/pi-smart-fetch/README.md) — pi.dev extension package, registers `web_fetch`
-### [Smart Fetch for OpenClaw](./packages/openclaw-smart-fetch/README.md) — OpenClaw plugin package, registers `smart_fetch`
+### [Smart Fetch for pi.dev](./packages/pi-smart-fetch/README.md) — pi.dev extension package, registers `web_fetch` and `batch_web_fetch`
+### [Smart Fetch for OpenClaw](./packages/openclaw-smart-fetch/README.md) — OpenClaw plugin package, registers `smart_fetch` and `batch_smart_fetch`
 
 ## Why use Smart Fetch?
 
@@ -42,10 +42,23 @@ This repo is built around a shared core with harness-specific adapters.
 Benefits:
 - **Consistent behavior across harnesses**
 - **Harness-appropriate tool names**
-  - pi → `web_fetch`
-  - OpenClaw → `smart_fetch`
+  - pi → `web_fetch`, `batch_web_fetch`
+  - OpenClaw → `smart_fetch`, `batch_smart_fetch`
 - **Shared tests and fetch/extraction logic** without duplicating implementation
+- **Built-in batch fan-out** with bounded concurrency and clear per-item result labeling
 - **Future harness support** can be added without rewriting the core pipeline
+
+## Batch fetch support
+
+This repo now supports batch fetching in the shared core.
+
+Behavior:
+- each batch item accepts the same request parameters as the single-fetch tool
+- results are returned in input order
+- each item is clearly labeled by URL
+- per-item failures include a bot-friendly error string next to that item
+- execution uses bounded concurrency with a default of `8`
+- pi can stream per-item progress in the TUI while OpenClaw keeps batch reporting simple and final-result focused
 
 ## Monorepo commands
 

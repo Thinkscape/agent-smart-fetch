@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  buildBatchFetchResponseText,
   buildCompactMetadataHeader,
   buildFetchResponseText,
   buildMetadataHeader,
@@ -10,7 +11,7 @@ import {
   stripExtractorComments,
   truncateContent,
 } from "../../src/format";
-import type { FetchResult } from "../../src/types";
+import type { BatchFetchResult, FetchResult } from "../../src/types";
 
 describe("markdownToText", () => {
   it("strips common markdown syntax while preserving readable text", () => {
@@ -140,5 +141,40 @@ describe("metadata formatting", () => {
     expect(buildFetchResponseText(result, { verbose: true })).toContain(
       "> Browser: chrome_145/windows",
     );
+  });
+
+  it("buildBatchFetchResponseText labels each item and preserves per-item errors", () => {
+    const batchResult: BatchFetchResult = {
+      items: [
+        {
+          index: 0,
+          request: { url: "https://example.com/source" },
+          status: "done",
+          progress: 1,
+          result,
+        },
+        {
+          index: 1,
+          request: { url: "https://bad.example/fail" },
+          status: "error",
+          progress: 1,
+          error: "HTTP 403 Forbidden for https://bad.example/fail",
+        },
+      ],
+      total: 2,
+      succeeded: 1,
+      failed: 1,
+      batchConcurrency: 8,
+    };
+
+    const output = buildBatchFetchResponseText(batchResult, { verbose: true });
+    expect(output).toContain("> Requests: 2");
+    expect(output).toContain("> Concurrency: 8");
+    expect(output).toContain("## [1/2] https://example.com/final");
+    expect(output).toContain("## [2/2] https://bad.example/fail");
+    expect(output).toContain(
+      "> Error: HTTP 403 Forbidden for https://bad.example/fail",
+    );
+    expect(output).toContain("> Browser: chrome_145/windows");
   });
 });

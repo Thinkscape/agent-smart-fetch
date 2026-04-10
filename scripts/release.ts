@@ -15,6 +15,7 @@ function run(command: string) {
 
 run("bun run check");
 run(`bun run scripts/version.ts ${kind}`);
+run("bun run format");
 
 const version = execSync("node -p \"require('./package.json').version\"", {
   encoding: "utf8",

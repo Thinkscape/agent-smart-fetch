@@ -1,7 +1,7 @@
 {
   "id": "smart-fetch",
   "name": "Smart Fetch",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Clean web content extraction with browser-grade TLS fingerprinting. Uses wreq-js (Rust native bindings) for anti-bot bypass and Defuddle for superior content extraction.",
   "configSchema": {
     "type": "object",
@@ -25,13 +25,7 @@
         "type": "string",
         "description": "Default OS profile for fingerprinting (default: windows)",
         "default": "windows",
-        "enum": [
-          "windows",
-          "macos",
-          "linux",
-          "android",
-          "ios"
-        ]
+        "enum": ["windows", "macos", "linux", "android", "ios"]
       },
       "removeImages": {
         "type": "boolean",
@@ -39,10 +33,7 @@
         "default": false
       },
       "includeReplies": {
-        "type": [
-          "boolean",
-          "string"
-        ],
+        "type": ["boolean", "string"],
         "description": "Include replies/comments: 'extractors' (default), true, or false",
         "default": "extractors"
       }

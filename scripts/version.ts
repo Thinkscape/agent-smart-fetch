@@ -58,13 +58,13 @@ const openClawManifestPath = join(
   "openclaw-smart-fetch",
   "openclaw.plugin.json",
 );
-const openClawManifest = JSON.parse(
-  readFileSync(openClawManifestPath, "utf-8"),
-) as { version?: string };
-openClawManifest.version = nextVersion;
+const openClawManifest = readFileSync(openClawManifestPath, "utf-8");
 writeFileSync(
   openClawManifestPath,
-  `${JSON.stringify(openClawManifest, null, 2)}\n`,
+  `${openClawManifest.replace(
+    /"version":\s*"[^"]+"/,
+    `"version": "${nextVersion}"`,
+  )}\n`,
 );
 console.log(
   `Updated packages/openclaw-smart-fetch/openclaw.plugin.json -> ${nextVersion}`,

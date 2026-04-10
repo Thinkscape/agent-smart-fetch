@@ -1,23 +1,20 @@
 #!/bin/bash
-# Install git pre-commit hook for defuddle-fetch
-set -e
+set -euo pipefail
 
-HOOK_DIR="$(git -C "$(dirname "$0")/.." rev-parse --git-dir)/hooks"
-HOOK_FILE="$HOOK_DIR/pre-commit"
+REPO_ROOT="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
+HOOK_DIR="$(git -C "$REPO_ROOT" rev-parse --git-dir)/hooks"
+SOURCE_DIR="$REPO_ROOT/scripts/git-hooks"
 
 mkdir -p "$HOOK_DIR"
 
-cat > "$HOOK_FILE" << 'EOF'
-#!/bin/bash
-# Pre-commit hook: run tests before allowing commit
-set -e
+install_hook() {
+  local name="$1"
+  cp "$SOURCE_DIR/$name" "$HOOK_DIR/$name"
+  chmod +x "$HOOK_DIR/$name"
+  echo "✅ Installed $name hook"
+}
 
-echo "🧪 Running pre-commit tests..."
-cd "$(git rev-parse --show-toplevel)"
-bun run test
+install_hook pre-commit
+install_hook pre-push
 
-echo "✅ All tests passed."
-EOF
-
-chmod +x "$HOOK_FILE"
-echo "✅ Pre-commit hook installed at $HOOK_FILE"
+echo "✅ Git hooks installed in $HOOK_DIR"

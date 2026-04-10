@@ -55,7 +55,8 @@
     "release": "bun run scripts/release.ts patch",
     "release:minor": "bun run scripts/release.ts minor",
     "release:major": "bun run scripts/release.ts major",
-    "detect-latest-chrome": "bun run scripts/detect-chrome.ts"
+    "detect-latest-chrome": "bun run scripts/detect-chrome.ts",
+    "hooks:install": "bash scripts/install-hooks.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.11",

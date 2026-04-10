@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "🧹 Running pre-commit checks (lint + tests)..."
+bun run lint
+bun run test
+
+echo "✅ Pre-commit checks passed."

@@ -4,14 +4,52 @@ A Bun monorepo for smart web fetching across multiple agent harnesses.
 
 ## Start here
 
-This root README is intentionally just a signpost.
-
 Published packages:
 - [`pi-smart-fetch`](./packages/pi-smart-fetch/README.md) — pi.dev extension package, registers `web_fetch`
 - [`openclaw-smart-fetch`](./packages/openclaw-smart-fetch/README.md) — OpenClaw plugin package, registers `defuddle_fetch`
 
 Internal package:
 - `packages/core` — shared fetch/extract core used by both published packages; not published to npm
+
+## Why use this repo
+
+### 1. `wreq-js` improves fetching on bot-defended sites
+
+This repo uses `wreq-js` for network requests instead of relying on a naive Node.js HTTP stack.
+
+Practical benefits:
+- **Browser-like TLS fingerprinting** — request handshakes look much closer to real browsers, which matters on sites that inspect TLS fingerprints.
+- **HTTP/2/browser impersonation** — helps avoid the classic mismatch where headers claim “Chrome” but the transport layer clearly does not.
+- **Better success rate on anti-bot protected pages** — especially where simple `fetch()` requests are challenged, blocked, or silently degraded.
+- **Lower overhead than full browser automation** — useful for readable-page fetching when you do not actually need JS execution, clicks, or logins.
+- **Configurable browser/OS profiles** — useful when a specific fingerprint works better against a target site.
+
+In short: it targets the class of failures where standard HTTP clients get flagged before content extraction even begins.
+
+### 2. `Defuddle` turns messy pages into AI-friendly readable content
+
+This repo uses `Defuddle` after fetching the raw page.
+
+Practical benefits:
+- **Extracts the main article/page content** instead of returning the full noisy DOM.
+- **Removes clutter** like sidebars, nav, headers, footers, and other irrelevant chrome.
+- **Produces cleaner markdown/text/html** for downstream agent consumption.
+- **Preserves useful metadata** such as title, author, published date, site, and language when available.
+- **Reduces token waste** by giving agents the readable content instead of the entire page shell.
+
+In short: it optimizes fetched pages for analysis, summarization, RAG ingestion, and agent workflows.
+
+### 3. One shared core, multiple harness adapters
+
+This repo is built around a shared core with harness-specific adapters.
+
+Benefits:
+- **Consistent behavior across harnesses**
+- **Harness-appropriate tool names**
+  - pi → `web_fetch`
+  - OpenClaw → `defuddle_fetch`
+- **Shared tests and fetch/extraction logic** without duplicating implementation
+- **Future harness support** can be added without rewriting the core pipeline
 
 ## Monorepo commands
 
@@ -45,6 +83,12 @@ Integration tests:
 
 ```bash
 bun run test:integration
+```
+
+Install local git hooks:
+
+```bash
+bun run hooks:install
 ```
 
 ## Versioning and publishing

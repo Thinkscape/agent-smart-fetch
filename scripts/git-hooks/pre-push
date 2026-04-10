@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "🏗️ Running pre-push checks (full build verification)..."
+bun run check
+
+echo "✅ Pre-push checks passed."

@@ -1,0 +1,101 @@
+{
+  "name": "openclaw-defuddle-fetch",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenClaw plugin for web content extraction with browser-grade TLS fingerprinting (wreq-js) and superior content extraction (Defuddle).",
+  "license": "MIT",
+  "author": "Thinkscape",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Thinkscape/openclaw-defuddle-fetch.git"
+  },
+  "homepage": "https://github.com/Thinkscape/openclaw-defuddle-fetch#readme",
+  "bugs": {
+    "url": "https://github.com/Thinkscape/openclaw-defuddle-fetch/issues"
+  },
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "defuddle",
+    "wreq-js",
+    "content-extraction",
+    "web-fetch",
+    "tls-fingerprinting"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./extract": {
+      "types": "./dist/src/extract.d.ts",
+      "import": "./dist/src/extract.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "index.ts",
+    "src/",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.3.0",
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "compat": {
+      "pluginApi": ">=2026.3.2",
+      "minGatewayVersion": "2026.3.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.2",
+      "pluginSdkVersion": "2026.3.2"
+    }
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "clean:all": "rm -rf dist coverage",
+    "build": "bun run clean && bunx tsc -p tsconfig.build.json",
+    "test": "bun test test/unit test/plugin.test.ts test/contract",
+    "test:integration": "RUN_INTEGRATION=1 bun test test/integration --timeout 30000",
+    "test:all": "bun run test && bun run test:integration",
+    "test:quick": "bun run test",
+    "coverage": "bun test test/unit test/plugin.test.ts test/contract --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage",
+    "lint": "bun run lint:code && bun run typecheck",
+    "lint:code": "bunx biome check .",
+    "format": "bunx biome format --write .",
+    "format:check": "bunx biome format --check .",
+    "typecheck": "bunx tsc -p tsconfig.json",
+    "check": "bun run lint && bun run test && bun run build",
+    "pack:dry-run": "bun run build && npm pack --dry-run",
+    "version:patch": "bun run test && npm version patch --no-git-tag-version",
+    "version:minor": "bun run test && npm version minor --no-git-tag-version",
+    "release": "bun run check && npm version patch --no-git-tag-version && git add -A && git commit -m \"chore: release v$(node -p 'require(\"./package.json\").version')\" && git tag -a \"v$(node -p 'require(\"./package.json\").version')\" -m \"Release v$(node -p 'require(\"./package.json\").version')\"",
+    "release:publish": "npm publish --access public",
+    "update-deps": "bun update && bun run detect-latest-chrome",
+    "detect-latest-chrome": "bun run scripts/detect-chrome.ts",
+    "prepack": "bun run check"
+  },
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.49",
+    "defuddle": "^0.14.0",
+    "linkedom": "^0.18.12",
+    "wreq-js": "^2.2.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.11",
+    "@types/bun": "^1.3.11",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.2"
+  }
+}

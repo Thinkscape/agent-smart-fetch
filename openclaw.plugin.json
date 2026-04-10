@@ -1,0 +1,43 @@
+{
+  "id": "defuddle-fetch",
+  "name": "Defuddle Fetch",
+  "version": "0.1.0",
+  "description": "Clean web content extraction with browser-grade TLS fingerprinting. Uses wreq-js (Rust native bindings) for anti-bot bypass and Defuddle for superior content extraction.",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "maxChars": {
+        "type": "number",
+        "description": "Maximum characters to return (default: 50000)",
+        "default": 50000
+      },
+      "timeoutMs": {
+        "type": "number",
+        "description": "Fetch timeout in milliseconds (default: 15000)",
+        "default": 15000
+      },
+      "browser": {
+        "type": "string",
+        "description": "Default browser profile for TLS fingerprinting (default: chrome_145)",
+        "default": "chrome_145"
+      },
+      "os": {
+        "type": "string",
+        "description": "Default OS profile for fingerprinting (default: windows)",
+        "default": "windows",
+        "enum": ["windows", "macos", "linux", "android", "ios"]
+      },
+      "removeImages": {
+        "type": "boolean",
+        "description": "Strip image references from output (default: false)",
+        "default": false
+      },
+      "includeReplies": {
+        "type": ["boolean", "string"],
+        "description": "Include replies/comments: 'extractors' (default), true, or false",
+        "default": "extractors"
+      }
+    },
+    "additionalProperties": false
+  }
+}

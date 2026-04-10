@@ -32,7 +32,7 @@
     "coverage": "cd packages/core && bun run coverage",
     "lint": "bunx biome check . && bun run typecheck",
     "format": "bunx biome format --write .",
-    "format:check": "bunx biome format --check .",
+    "format:check": "bunx biome check --formatter-enabled=true --linter-enabled=false --assist-enabled=false .",
     "typecheck": "bun run typecheck:core && bun run typecheck:pi && bun run typecheck:openclaw",
     "typecheck:core": "cd packages/core && bun run typecheck",
     "typecheck:pi": "cd packages/pi-smart-fetch && bun run typecheck",

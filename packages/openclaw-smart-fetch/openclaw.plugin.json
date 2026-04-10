@@ -1,7 +1,7 @@
 {
   "id": "smart-fetch",
   "name": "Smart Fetch",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Clean web content extraction with browser-grade TLS fingerprinting. Uses wreq-js (Rust native bindings) for anti-bot bypass and Defuddle for superior content extraction.",
   "configSchema": {
     "type": "object",

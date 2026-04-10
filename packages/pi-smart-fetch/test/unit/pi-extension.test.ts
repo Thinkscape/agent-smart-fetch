@@ -41,7 +41,10 @@ describe("pi extension", () => {
 
     const schema = registeredTool.parameters as {
       required?: string[];
-      properties?: Record<string, { type?: string }>;
+      properties?: Record<
+        string,
+        { type?: string; anyOf?: Array<{ const?: string }> }
+      >;
     };
 
     expect(schema.required).toContain("url");
@@ -59,6 +62,10 @@ describe("pi extension", () => {
         "verbose",
       ]),
     );
+
+    const formatVariants =
+      schema.properties?.format?.anyOf?.map((variant) => variant.const) ?? [];
+    expect(formatVariants).toEqual(["markdown", "html", "text", "json"]);
   });
 
   it("surfaces invalid URL errors from the pi execution path", async () => {

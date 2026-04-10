@@ -8,13 +8,21 @@ import {
   DEFAULT_ACCEPT_LANGUAGE_HEADER,
   DEFAULT_BROWSER,
   DEFAULT_INCLUDE_REPLIES,
+  DEFAULT_JSON_ACCEPT_HEADER,
   DEFAULT_MAX_CHARS,
   DEFAULT_OS,
   DEFAULT_TIMEOUT_MS,
 } from "./constants";
 import { runtimeDependencies } from "./dependencies";
 import { parseLinkedomHTML } from "./dom";
-import { markdownToText, truncateContent } from "./format";
+import {
+  estimateWordCount,
+  markdownToText,
+  parseAndFormatJson,
+  renderJsonContent,
+  stripExtractorComments,
+  truncateContent,
+} from "./format";
 import { getLatestChromeProfile as getLatestChromeProfileFrom } from "./profiles";
 import type {
   FetchDependencies,
@@ -44,6 +52,71 @@ const HTML_CONTENT_TYPES = [
   "text/plain",
   "text/markdown",
 ];
+
+function resolveAcceptHeader(format: OutputFormat): string {
+  return format === "json" ? DEFAULT_JSON_ACCEPT_HEADER : DEFAULT_ACCEPT_HEADER;
+}
+
+function isJsonContentType(contentType: string): boolean {
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  return (
+    normalized === "application/json" ||
+    normalized === "text/json" ||
+    normalized.endsWith("+json")
+  );
+}
+
+function isLikelyJsonBody(body: string): boolean {
+  const trimmed = body.trim();
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
+
+function isJsonResponse(contentType: string, body: string): boolean {
+  return isJsonContentType(contentType) || isLikelyJsonBody(body);
+}
+
+function buildJsonResult(
+  opts: FetchOptions,
+  finalUrl: string,
+  rawBody: string,
+  format: OutputFormat,
+  maxChars: number,
+  browser: string,
+  os: string,
+): FetchResult | FetchError {
+  const parsedJson = parseAndFormatJson(rawBody);
+
+  if ("error" in parsedJson) {
+    return parsedJson;
+  }
+
+  const content = truncateContent(
+    renderJsonContent(parsedJson.formatted, format),
+    maxChars,
+  );
+
+  return {
+    url: opts.url,
+    finalUrl,
+    title: "",
+    author: "",
+    published: "",
+    site: new URL(finalUrl).hostname,
+    language: "",
+    wordCount: estimateWordCount(parsedJson.formatted),
+    content,
+    browser,
+    os,
+  };
+}
+
+function shouldStripReplies(site: string): boolean {
+  return (
+    site === "Hacker News" ||
+    site.startsWith("r/") ||
+    site.startsWith("GitHub - ")
+  );
+}
 
 export function getLatestChromeProfile(): string {
   return getLatestChromeProfileFrom(runtimeDependencies.getProfiles);
@@ -80,7 +153,7 @@ export function createDefuddleFetch(
       browser,
       os,
       headers: {
-        Accept: DEFAULT_ACCEPT_HEADER,
+        Accept: resolveAcceptHeader(format),
         "Accept-Language": DEFAULT_ACCEPT_LANGUAGE_HEADER,
         ...opts.headers,
       },
@@ -102,13 +175,42 @@ export function createDefuddleFetch(
 
     const finalUrl = response.url ?? opts.url;
     const contentType = response.headers.get("content-type") ?? "";
+    const rawBody = await response.text();
+    const jsonResponse = isJsonResponse(contentType, rawBody);
+
+    if (format === "json") {
+      if (!jsonResponse) {
+        return { error: `Not a JSON response (content-type: ${contentType})` };
+      }
+
+      return buildJsonResult(
+        opts,
+        finalUrl,
+        rawBody,
+        format,
+        maxChars,
+        browser,
+        os,
+      );
+    }
+
+    if (jsonResponse) {
+      return buildJsonResult(
+        opts,
+        finalUrl,
+        rawBody,
+        format,
+        maxChars,
+        browser,
+        os,
+      );
+    }
 
     if (!HTML_CONTENT_TYPES.some((value) => contentType.includes(value))) {
       return { error: `Not an HTML page (content-type: ${contentType})` };
     }
 
-    const html = await response.text();
-    const document = parseLinkedomHTML(html, finalUrl);
+    const document = parseLinkedomHTML(rawBody, finalUrl);
     const extracted = await dependencies.defuddle(document, finalUrl, {
       markdown: format !== "html",
       removeImages,
@@ -121,8 +223,23 @@ export function createDefuddleFetch(
       };
     }
 
+    let extractedContent = extracted.content;
+    let wordCount = extracted.wordCount;
+
+    if (includeReplies === false && shouldStripReplies(extracted.site ?? "")) {
+      const strippedContent = stripExtractorComments(extractedContent, format);
+      if (strippedContent !== extractedContent) {
+        extractedContent = strippedContent;
+        wordCount = estimateWordCount(
+          format === "text"
+            ? markdownToText(extractedContent)
+            : extractedContent,
+        );
+      }
+    }
+
     const normalizedContent =
-      format === "text" ? markdownToText(extracted.content) : extracted.content;
+      format === "text" ? markdownToText(extractedContent) : extractedContent;
 
     return {
       url: opts.url,
@@ -132,7 +249,7 @@ export function createDefuddleFetch(
       published: extracted.published ?? "",
       site: extracted.site ?? "",
       language: extracted.language ?? "",
-      wordCount: extracted.wordCount,
+      wordCount,
       content: truncateContent(normalizedContent, maxChars),
       browser,
       os,

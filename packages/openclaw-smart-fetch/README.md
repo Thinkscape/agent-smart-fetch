@@ -71,7 +71,7 @@ Use `smart_fetch` when you want to:
 | `os`              | string                        | `windows`       | OS profile: `windows`, `macos`, `linux`, `android`, `ios` |
 | `headers`         | object                        | auto            | Extra request headers                                     |
 | `maxChars`        | number                        | `50000`         | Maximum returned characters                               |
-| `format`          | `markdown` \| `html` \| `text`| `markdown`      | Output format                                             |
+| `format`          | `markdown` \| `html` \| `text` \| `json` | `markdown`      | Output format                                             |
 | `removeImages`    | boolean                       | `false`         | Strip image references from output                        |
 | `includeReplies`  | boolean \| `extractors`       | `extractors`    | Include replies/comments                                  |
 | `proxy`           | string                        | none            | Proxy URL                                                 |

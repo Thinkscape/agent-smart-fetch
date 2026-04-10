@@ -3,7 +3,11 @@ import {
   buildCompactMetadataHeader,
   buildFetchResponseText,
   buildMetadataHeader,
+  escapeHtml,
   markdownToText,
+  parseAndFormatJson,
+  renderJsonContent,
+  stripExtractorComments,
   truncateContent,
 } from "../../src/format";
 import type { FetchResult } from "../../src/types";
@@ -19,6 +23,54 @@ describe("markdownToText", () => {
     expect(output).toContain("• item");
     expect(output).not.toContain("# ");
     expect(output).not.toContain("[");
+  });
+});
+
+describe("JSON formatting helpers", () => {
+  it("pretty-prints valid JSON", () => {
+    expect(parseAndFormatJson('{"hello":"world"}')).toEqual({
+      formatted: '{\n  "hello": "world"\n}',
+    });
+  });
+
+  it("returns an error for invalid JSON", () => {
+    expect(parseAndFormatJson("not-json")).toEqual({
+      error: "Invalid JSON response",
+    });
+  });
+
+  it("renders JSON appropriately for markdown, text, and html", () => {
+    const formatted = '{\n  "hello": "world"\n}';
+
+    expect(renderJsonContent(formatted, "markdown")).toBe(
+      '```json\n{\n  "hello": "world"\n}\n```',
+    );
+    expect(renderJsonContent(formatted, "text")).toBe(formatted);
+    expect(renderJsonContent(formatted, "json")).toBe(formatted);
+    expect(renderJsonContent(formatted, "html")).toBe(
+      '<pre><code class="language-json">{\n  &quot;hello&quot;: &quot;world&quot;\n}</code></pre>',
+    );
+  });
+
+  it("escapes HTML entities", () => {
+    expect(escapeHtml('<tag attr="x">&</tag>')).toBe(
+      "&lt;tag attr=&quot;x&quot;&gt;&amp;&lt;/tag&gt;",
+    );
+  });
+
+  it("strips site extractor comment sections", () => {
+    expect(
+      stripExtractorComments(
+        "Story\n\n---\n\n## Comments\n\n> hello",
+        "markdown",
+      ),
+    ).toBe("Story");
+    expect(
+      stripExtractorComments(
+        '<div class="post">Story</div><hr><div class="hackernews comments">Hello</div>',
+        "html",
+      ),
+    ).toBe('<div class="post">Story</div>');
   });
 });
 

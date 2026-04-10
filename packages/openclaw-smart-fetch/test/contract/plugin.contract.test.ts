@@ -38,7 +38,7 @@ describe("plugin contract", () => {
 
     const formatVariants =
       schema.properties?.format?.anyOf?.map((variant) => variant.const) ?? [];
-    expect(formatVariants).toEqual(["markdown", "html", "text"]);
+    expect(formatVariants).toEqual(["markdown", "html", "text", "json"]);
   });
 
   it("returns an MCP-style error payload for invalid input", async () => {

@@ -10,9 +10,14 @@ import type {
   FetchResponseLike,
 } from "../../src/types";
 
-function createResponse(
-  overrides: Partial<FetchResponseLike> = {},
-): FetchResponseLike {
+function createResponse({
+  contentType = "text/html; charset=utf-8",
+  body = "<html><body><article><h1>Hello</h1><p>World</p></article></body></html>",
+  ...overrides
+}: Partial<FetchResponseLike> & {
+  contentType?: string;
+  body?: string;
+} = {}): FetchResponseLike {
   return {
     ok: true,
     status: 200,
@@ -20,13 +25,10 @@ function createResponse(
     url: "https://example.com/final",
     headers: {
       get(name: string) {
-        return name.toLowerCase() === "content-type"
-          ? "text/html; charset=utf-8"
-          : null;
+        return name.toLowerCase() === "content-type" ? contentType : null;
       },
     },
-    text: async () =>
-      "<html><body><article><h1>Hello</h1><p>World</p></article></body></html>",
+    text: async () => body,
     ...overrides,
   };
 }
@@ -64,7 +66,7 @@ describe("createDefuddleFetch", () => {
     expect(dependencies.fetch).not.toHaveBeenCalled();
   });
 
-  it("builds default headers and timeout for fetch", async () => {
+  it("builds default headers and timeout for HTML fetches", async () => {
     const dependencies = createDependencies();
     const defuddleFetch = createDefuddleFetch(dependencies);
 
@@ -80,6 +82,29 @@ describe("createDefuddleFetch", () => {
         headers: expect.objectContaining({
           Accept: expect.stringContaining("text/html"),
           "Accept-Language": "en-US,en;q=0.9",
+        }),
+      }),
+    );
+  });
+
+  it("sends a JSON-focused Accept header when format=json", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          contentType: "application/json; charset=utf-8",
+          body: '{"hello":"world"}',
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    await defuddleFetch({ url: "https://example.com/data", format: "json" });
+
+    expect(dependencies.fetch).toHaveBeenCalledWith(
+      "https://example.com/data",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Accept: expect.stringContaining("application/json"),
         }),
       }),
     );
@@ -108,24 +133,38 @@ describe("createDefuddleFetch", () => {
     );
   });
 
-  it("returns an error for non-html content types", async () => {
+  it("returns an error for unsupported non-HTML and non-JSON content types", async () => {
     const dependencies = createDependencies({
       fetch: mock(async () =>
         createResponse({
-          headers: {
-            get: () => "application/json",
-          },
+          contentType: "application/pdf",
+          body: "%PDF-1.7",
         }),
       ),
     });
     const defuddleFetch = createDefuddleFetch(dependencies);
 
     const result = await defuddleFetch({
-      url: "https://example.com/data.json",
+      url: "https://example.com/file.pdf",
     });
 
     expect(result).toEqual({
-      error: "Not an HTML page (content-type: application/json)",
+      error: "Not an HTML page (content-type: application/pdf)",
+    });
+    expect(dependencies.defuddle).not.toHaveBeenCalled();
+  });
+
+  it("returns an error when format=json does not receive JSON", async () => {
+    const dependencies = createDependencies();
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/article",
+      format: "json",
+    });
+
+    expect(result).toEqual({
+      error: "Not a JSON response (content-type: text/html; charset=utf-8)",
     });
     expect(dependencies.defuddle).not.toHaveBeenCalled();
   });
@@ -206,6 +245,158 @@ describe("createDefuddleFetch", () => {
         "<article><h1>Hello</h1><p><strong>World</strong></p></article>",
       );
       expect(result.content).toContain("<strong>");
+    }
+  });
+
+  it("strips leaked extractor comments when includeReplies=false in markdown/text formats", async () => {
+    const dependencies = createDependencies({
+      defuddle: mock(
+        async () =>
+          ({
+            content:
+              "[Story](https://example.com)\n\n---\n\n## Comments\n\n> **alice**\n> hello",
+            wordCount: 200,
+            site: "Hacker News",
+          }) satisfies ExtractedContent,
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://news.ycombinator.com/item?id=1",
+      format: "text",
+      includeReplies: false,
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.content).toContain("Story");
+      expect(result.content).not.toContain("Comments");
+      expect(result.content).not.toContain("alice");
+      expect(result.wordCount).toBeLessThan(200);
+    }
+  });
+
+  it("strips leaked extractor comments when includeReplies=false in html mode", async () => {
+    const dependencies = createDependencies({
+      defuddle: mock(
+        async () =>
+          ({
+            content:
+              '<div class="hackernews post"><div class="post-content"><p>Story</p></div></div><hr><div class="hackernews comments"><h2>Comments</h2><div class="comment">Hello</div></div>',
+            wordCount: 200,
+            site: "Hacker News",
+          }) satisfies ExtractedContent,
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://news.ycombinator.com/item?id=1",
+      format: "html",
+      includeReplies: false,
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.content).toContain('<div class="hackernews post">');
+      expect(result.content).not.toContain('<div class="hackernews comments">');
+      expect(result.wordCount).toBeLessThan(200);
+    }
+  });
+
+  it("returns pretty-printed JSON when format=json", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          contentType: "application/json; charset=utf-8",
+          body: '{"hello":"world","count":2}',
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/data",
+      format: "json",
+    });
+
+    expect(isError(result)).toBe(false);
+    expect(dependencies.defuddle).not.toHaveBeenCalled();
+    if (!isError(result)) {
+      expect(result.content).toBe('{\n  "hello": "world",\n  "count": 2\n}');
+      expect(result.site).toBe("example.com");
+    }
+  });
+
+  it("wraps JSON responses in a fenced code block for markdown mode", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          contentType: "application/json",
+          body: '{"hello":"world"}',
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/data",
+      format: "markdown",
+    });
+
+    expect(isError(result)).toBe(false);
+    expect(dependencies.defuddle).not.toHaveBeenCalled();
+    if (!isError(result)) {
+      expect(result.content).toBe('```json\n{\n  "hello": "world"\n}\n```');
+    }
+  });
+
+  it("returns pretty-printed JSON as plain text for text mode", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          contentType: "application/json",
+          body: '{"hello":"world"}',
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/data",
+      format: "text",
+    });
+
+    expect(isError(result)).toBe(false);
+    expect(dependencies.defuddle).not.toHaveBeenCalled();
+    if (!isError(result)) {
+      expect(result.content).toBe('{\n  "hello": "world"\n}');
+    }
+  });
+
+  it("wraps JSON responses in HTML code markup for html mode", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          contentType: "application/json",
+          body: '{"hello":"<world>"}',
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/data",
+      format: "html",
+    });
+
+    expect(isError(result)).toBe(false);
+    expect(dependencies.defuddle).not.toHaveBeenCalled();
+    if (!isError(result)) {
+      expect(result.content).toBe(
+        '<pre><code class="language-json">{\n  &quot;hello&quot;: &quot;&lt;world&gt;&quot;\n}</code></pre>',
+      );
     }
   });
 

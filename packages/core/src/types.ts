@@ -1,4 +1,4 @@
-export type OutputFormat = "markdown" | "html" | "text";
+export type OutputFormat = "markdown" | "html" | "text" | "json";
 export type FingerprintOs = "windows" | "macos" | "linux" | "android" | "ios";
 export type IncludeRepliesOption = boolean | "extractors";
 
@@ -41,6 +41,7 @@ export interface ExtractedContent {
   published?: string;
   site?: string;
   language?: string;
+  extractorType?: string;
 }
 
 export interface FetchResponseLike {

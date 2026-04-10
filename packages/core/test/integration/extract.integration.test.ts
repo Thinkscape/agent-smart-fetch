@@ -26,12 +26,34 @@ describeIf("integration: extraction pipeline", () => {
   });
 
   it(
-    "rejects non-html content from a live endpoint",
+    "supports JSON responses in format=json against a live endpoint",
     async () => {
-      const result = await defuddleFetch({ url: TEST_URLS.httpbinJson });
-      expect(isError(result)).toBe(true);
-      if (isError(result)) {
-        expect(result.error).toContain("Not an HTML page");
+      const result = await defuddleFetch({
+        url: TEST_URLS.httpbinJson,
+        format: "json",
+      });
+
+      expect(isError(result)).toBe(false);
+      if (!isError(result)) {
+        expect(result.content).toContain('"slideshow"');
+        expect(result.content).toContain('"title"');
+      }
+    },
+    TIMEOUT,
+  );
+
+  it(
+    "supports JSON responses in markdown mode against a live endpoint",
+    async () => {
+      const result = await defuddleFetch({
+        url: TEST_URLS.httpbinJson,
+        format: "markdown",
+      });
+
+      expect(isError(result)).toBe(false);
+      if (!isError(result)) {
+        expect(result.content).toContain("```json");
+        expect(result.content).toContain('"slideshow"');
       }
     },
     TIMEOUT,

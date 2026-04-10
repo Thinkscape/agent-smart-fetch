@@ -1,4 +1,4 @@
-import type { FetchResult } from "./types";
+import type { FetchError, FetchResult, OutputFormat } from "./types";
 
 function buildHeader(
   parts: Array<[label: string, value: string | number | undefined]>,
@@ -57,4 +57,58 @@ export function buildFetchResponseText(
     : buildCompactMetadataHeader(result);
 
   return header ? `${header}\n\n${result.content}` : result.content;
+}
+
+export function estimateWordCount(content: string): number {
+  const words = content.trim().match(/\S+/g);
+  return words?.length ?? 0;
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+export function parseAndFormatJson(
+  raw: string,
+): { formatted: string } | FetchError {
+  try {
+    return {
+      formatted: JSON.stringify(JSON.parse(raw), null, 2),
+    };
+  } catch {
+    return { error: "Invalid JSON response" };
+  }
+}
+
+export function renderJsonContent(
+  formattedJson: string,
+  format: OutputFormat,
+): string {
+  switch (format) {
+    case "json":
+    case "text":
+      return formattedJson;
+    case "html":
+      return `<pre><code class="language-json">${escapeHtml(formattedJson)}</code></pre>`;
+    default:
+      return `\`\`\`json\n${formattedJson}\n\`\`\``;
+  }
+}
+
+export function stripExtractorComments(
+  content: string,
+  format: OutputFormat,
+): string {
+  if (format === "html") {
+    return content
+      .replace(/\s*<hr>\s*<div class="[^"]* comments">[\s\S]*$/i, "")
+      .trimEnd();
+  }
+
+  return content.replace(/\n---\n+## Comments\n[\s\S]*$/i, "").trimEnd();
 }

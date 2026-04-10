@@ -55,10 +55,15 @@ export function createBaseFetchToolParameterProperties(
     ),
     format: Type.Optional(
       Type.Union(
-        [Type.Literal("markdown"), Type.Literal("html"), Type.Literal("text")],
+        [
+          Type.Literal("markdown"),
+          Type.Literal("html"),
+          Type.Literal("text"),
+          Type.Literal("json"),
+        ],
         {
           description:
-            'Output format. "markdown" (default), "html" (cleaned HTML), or "text" (plain text, no formatting)',
+            'Output format. "markdown" (default), "html" (cleaned HTML), "text" (plain text, no formatting), or "json" (pretty-printed JSON)',
         },
       ),
     ),
@@ -92,7 +97,8 @@ export async function executeFetchToolCall(
     os: (params.os as string) ?? defaults.os,
     headers: params.headers as Record<string, string> | undefined,
     maxChars: (params.maxChars as number) ?? defaults.maxChars,
-    format: (params.format as "markdown" | "html" | "text") ?? "markdown",
+    format:
+      (params.format as "markdown" | "html" | "text" | "json") ?? "markdown",
     removeImages: (params.removeImages as boolean) ?? defaults.removeImages,
     includeReplies:
       (params.includeReplies as boolean | "extractors") ??

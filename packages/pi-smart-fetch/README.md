@@ -9,7 +9,7 @@ Compared with naive Node.js `fetch()`, this package gives you:
 - **clean readable extraction** via `Defuddle`, so agents get article content instead of raw noisy HTML
 - **better success on bot-defended pages** where plain server-side requests are blocked, challenged, or degraded
 - **useful metadata** like title, author, published date, site, and language when available
-- **multiple output formats**: `markdown`, `html`, or `text`
+- **multiple output formats**: `markdown`, `html`, `text`, or `json`
 - **the familiar pi tool name**: it registers `web_fetch`
 - **pi-specific behavior** including an optional `verbose` flag and defaults from pi settings
 - **lower overhead than browser automation** when you do not need JS execution, login, scrolling, or clicks
@@ -103,7 +103,7 @@ Error: Invalid URL: not-a-url
 | `os`              | string                        | `windows`       | OS profile: `windows`, `macos`, `linux`, `android`, `ios`                   |
 | `headers`         | object                        | auto            | Extra request headers                                                        |
 | `maxChars`        | number                        | `50000`         | Maximum returned characters. Can be overridden by pi settings                |
-| `format`          | `markdown` \| `html` \| `text` | `markdown`      | Output format                                                                |
+| `format`          | `markdown` \| `html` \| `text` \| `json` | `markdown`      | Output format                                                                |
 | `removeImages`    | boolean                       | `false`         | Strip image references from output                                           |
 | `includeReplies`  | boolean \| `extractors`       | `extractors`    | Include replies/comments                                                     |
 | `proxy`           | string                        | none            | Proxy URL                                                                    |

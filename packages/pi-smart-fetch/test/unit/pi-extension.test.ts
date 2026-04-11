@@ -2,8 +2,14 @@ import { describe, expect, it, mock } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, initTheme } from "@mariozechner/pi-coding-agent";
 import piSmartFetchExtension from "../../src/index";
+
+interface RenderTheme {
+  bold(value: string): string;
+  fg(color: string, value: string): string;
+  bg(color: string, value: string): string;
+}
 
 interface RegisteredPiTool {
   name: string;
@@ -18,6 +24,15 @@ interface RegisteredPiTool {
     content: Array<{ type: string; text: string }>;
     details?: Record<string, unknown>;
   }>;
+  renderResult?: (
+    result: {
+      content: Array<{ type: string; text: string }>;
+      details?: Record<string, unknown>;
+    },
+    options: { expanded: boolean; isPartial?: boolean },
+    theme: RenderTheme,
+    context?: unknown,
+  ) => { render(width: number): string[] };
 }
 
 function registerPiTools() {
@@ -38,6 +53,14 @@ function findTool(name: string) {
   expect(tool).toBeDefined();
   return tool as RegisteredPiTool;
 }
+
+const testTheme: RenderTheme = {
+  bold: (value) => value,
+  fg: (_color, value) => value,
+  bg: (_color, value) => value,
+};
+
+initTheme("dark");
 
 describe("pi extension", () => {
   it("registers a web_fetch tool with the OpenClaw-compatible parameter surface plus verbose", () => {
@@ -114,6 +137,61 @@ describe("pi extension", () => {
 
     expect(response.content[0]?.text).toContain("Error: Invalid URL");
     expect(response.details).toEqual({ error: true, verbose: false });
+  });
+
+  it("renders web_fetch as a compact collapsed panel and full output when expanded", () => {
+    const registeredTool = findTool("web_fetch");
+    expect(registeredTool.renderResult).toBeDefined();
+
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: [
+            "> URL: https://example.com/article",
+            "> Title: Example Article",
+            "",
+            "# Example Article",
+            "Full fetched body text.",
+          ].join("\n"),
+        },
+      ],
+      details: {
+        verbose: false,
+        maxChars: 50000,
+        fetchResult: {
+          url: "https://example.com/article",
+          finalUrl: "https://example.com/article",
+          title: "Example Article",
+          author: "",
+          published: "",
+          site: "Example",
+          language: "en",
+          wordCount: 321,
+          content: "# Example Article\nFull fetched body text.",
+          browser: "chrome_145",
+          os: "windows",
+        },
+      },
+    };
+
+    const collapsedLines = registeredTool
+      .renderResult?.(result, { expanded: false }, testTheme)
+      .render(120);
+    const collapsedText = collapsedLines?.join("\n") ?? "";
+    expect(collapsedText).toContain("web_fetch Example Article");
+    expect(collapsedText).toContain(
+      "Example · en · 321 words · chrome_145/windows",
+    );
+    expect(collapsedText).toContain("to expand");
+    expect(collapsedText).not.toContain("Full fetched body text.");
+
+    const expandedLines = registeredTool
+      .renderResult?.(result, { expanded: true }, testTheme)
+      .render(120);
+    const expandedText = expandedLines?.join("\n") ?? "";
+    expect(expandedText).toContain("# Example Article");
+    expect(expandedText).toContain("Full fetched body text.");
   });
 
   it("returns labeled per-item results and streams progress updates for batch_web_fetch", async () => {

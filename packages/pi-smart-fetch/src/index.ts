@@ -1,4 +1,8 @@
-import { type ExtensionAPI, getAgentDir } from "@mariozechner/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  getAgentDir,
+  keyHint,
+} from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import {
@@ -11,6 +15,7 @@ import {
   createBatchFetchToolParameterProperties,
   executeBatchFetchToolCall,
   executeFetchToolCall,
+  type FetchResult,
   isError,
   resolveFetchToolDefaults,
 } from "smart-fetch-core";
@@ -31,6 +36,13 @@ const batchToolDescription = [
 ].join(" ");
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+type WebFetchRenderDetails = {
+  error?: boolean;
+  verbose?: boolean;
+  maxChars?: number;
+  fetchResult?: FetchResult;
+};
 
 type BatchRenderDetails = {
   verbose?: boolean;
@@ -190,6 +202,41 @@ function renderBatchProgressText(
   return [summary, ...rows].join("\n");
 }
 
+function buildWebFetchCollapsedText(
+  details: WebFetchRenderDetails,
+  theme: {
+    bold(value: string): string;
+    fg(color: string, value: string): string;
+  },
+) {
+  const fetchResult = details.fetchResult;
+  if (!fetchResult) {
+    return theme.fg("muted", "No fetch result available.");
+  }
+
+  const title = fetchResult.title || fetchResult.finalUrl || fetchResult.url;
+  const metadata = [
+    fetchResult.site,
+    fetchResult.language,
+    fetchResult.wordCount ? `${fetchResult.wordCount} words` : undefined,
+    `${fetchResult.browser}/${fetchResult.os}`,
+  ].filter(Boolean);
+
+  let text = theme.fg("toolTitle", theme.bold("web_fetch "));
+  text += theme.fg("accent", title);
+
+  if (metadata.length > 0) {
+    text += `\n${theme.fg("muted", metadata.join(" · "))}`;
+  }
+
+  text += `\n${theme.fg(
+    "muted",
+    `(${keyHint("app.tools.expand", "to expand")})`,
+  )}`;
+
+  return text;
+}
+
 function createResponsiveBatchComponent(
   details: BatchRenderDetails,
   expanded: boolean,
@@ -258,8 +305,34 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
         content: [
           { type: "text", text: buildFetchResponseText(result, { verbose }) },
         ],
-        details: { verbose, maxChars: runtimeDefaults.maxChars },
+        details: {
+          verbose,
+          maxChars: runtimeDefaults.maxChars,
+          fetchResult: result,
+        } satisfies WebFetchRenderDetails,
       };
+    },
+
+    renderResult(result, { expanded, isPartial }, theme) {
+      if (isPartial) {
+        return new Text(theme.fg("warning", "Fetching..."), 0, 0);
+      }
+
+      const details =
+        (result.details as WebFetchRenderDetails | undefined) ?? {};
+      const textContent = result.content.find((item) => item.type === "text");
+      const outputText = textContent?.type === "text" ? textContent.text : "";
+
+      if (details.error) {
+        const firstLine = outputText.split("\n")[0] ?? "Error";
+        return new Text(theme.fg("error", firstLine), 0, 0);
+      }
+
+      if (!expanded) {
+        return new Text(buildWebFetchCollapsedText(details, theme), 0, 0);
+      }
+
+      return new Text(outputText, 0, 0);
     },
   });
 

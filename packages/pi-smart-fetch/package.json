@@ -63,9 +63,6 @@
     "defuddle": "^0.14.0",
     "linkedom": "^0.18.12"
   },
-  "devDependencies": {
-    "smart-fetch-core": "0.2.2"
-  },
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   }

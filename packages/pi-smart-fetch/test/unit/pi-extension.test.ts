@@ -152,7 +152,15 @@ describe("pi extension", () => {
             "> Title: Example Article",
             "",
             "# Example Article",
-            "Full fetched body text.",
+            "Line 1",
+            "Line 2",
+            "Line 3",
+            "Line 4",
+            "Line 5",
+            "Line 6",
+            "Line 7",
+            "Line 8",
+            "Line 9",
           ].join("\n"),
         },
       ],
@@ -168,7 +176,18 @@ describe("pi extension", () => {
           site: "Example",
           language: "en",
           wordCount: 321,
-          content: "# Example Article\nFull fetched body text.",
+          content: [
+            "# Example Article",
+            "Line 1",
+            "Line 2",
+            "Line 3",
+            "Line 4",
+            "Line 5",
+            "Line 6",
+            "Line 7",
+            "Line 8",
+            "Line 9",
+          ].join("\n"),
           browser: "chrome_145",
           os: "windows",
         },
@@ -179,19 +198,19 @@ describe("pi extension", () => {
       .renderResult?.(result, { expanded: false }, testTheme)
       .render(120);
     const collapsedText = collapsedLines?.join("\n") ?? "";
-    expect(collapsedText).toContain("web_fetch Example Article");
-    expect(collapsedText).toContain(
-      "Example · en · 321 words · chrome_145/windows",
-    );
-    expect(collapsedText).toContain("to expand");
-    expect(collapsedText).not.toContain("Full fetched body text.");
+    expect(collapsedText).toContain("> Title: Example Article");
+    expect(collapsedText).toContain("# Example Article");
+    expect(collapsedText).toContain("Line 6");
+    expect(collapsedText).not.toContain("Line 8");
+    expect(collapsedText).toContain("Ctrl+O to expand");
+    expect(collapsedText).not.toContain("web_fetch Example Article");
 
     const expandedLines = registeredTool
       .renderResult?.(result, { expanded: true }, testTheme)
       .render(120);
     const expandedText = expandedLines?.join("\n") ?? "";
     expect(expandedText).toContain("# Example Article");
-    expect(expandedText).toContain("Full fetched body text.");
+    expect(expandedText).toContain("Line 9");
   });
 
   it("returns labeled per-item results and streams progress updates for batch_web_fetch", async () => {

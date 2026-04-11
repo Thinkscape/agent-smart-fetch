@@ -1,7 +1,7 @@
 import {
   type ExtensionAPI,
   getAgentDir,
-  keyHint,
+  keyText,
 } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
@@ -205,7 +205,6 @@ function renderBatchProgressText(
 function buildWebFetchCollapsedText(
   details: WebFetchRenderDetails,
   theme: {
-    bold(value: string): string;
     fg(color: string, value: string): string;
   },
 ) {
@@ -214,27 +213,48 @@ function buildWebFetchCollapsedText(
     return theme.fg("muted", "No fetch result available.");
   }
 
-  const title = fetchResult.title || fetchResult.finalUrl || fetchResult.url;
-  const metadata = [
-    fetchResult.site,
-    fetchResult.language,
-    fetchResult.wordCount ? `${fetchResult.wordCount} words` : undefined,
-    `${fetchResult.browser}/${fetchResult.os}`,
-  ].filter(Boolean);
-
-  let text = theme.fg("toolTitle", theme.bold("web_fetch "));
-  text += theme.fg("accent", title);
-
-  if (metadata.length > 0) {
-    text += `\n${theme.fg("muted", metadata.join(" · "))}`;
+  const metadataLines: string[] = [];
+  if (fetchResult.title) {
+    metadataLines.push(theme.fg("muted", `> Title: ${fetchResult.title}`));
+  }
+  if (fetchResult.published) {
+    metadataLines.push(
+      theme.fg("muted", `> Published: ${fetchResult.published}`),
+    );
+  }
+  if (fetchResult.author) {
+    metadataLines.push(theme.fg("muted", `> Author: ${fetchResult.author}`));
   }
 
-  text += `\n${theme.fg(
-    "muted",
-    `(${keyHint("app.tools.expand", "to expand")})`,
-  )}`;
+  const contentLines = fetchResult.content
+    .split("\n")
+    .filter(
+      (line, index, lines) =>
+        line.length > 0 || index === 0 || index < lines.length - 1,
+    );
+  const maxPreviewLines = 7;
+  const previewLines = contentLines.slice(0, maxPreviewLines);
+  const remainingLines = Math.max(0, contentLines.length - previewLines.length);
+  const expandKey = keyText("app.tools.expand") || "Ctrl+O";
 
-  return text;
+  const parts: string[] = [];
+  if (metadataLines.length > 0) {
+    parts.push(...metadataLines, "");
+  }
+
+  if (previewLines.length > 0) {
+    parts.push(...previewLines.map((line) => theme.fg("toolOutput", line)));
+  }
+
+  if (remainingLines > 0) {
+    parts.push(
+      theme.fg("muted", `... (${remainingLines} more lines, `) +
+        theme.fg("dim", expandKey) +
+        theme.fg("muted", " to expand)"),
+    );
+  }
+
+  return parts.join("\n");
 }
 
 function createResponsiveBatchComponent(

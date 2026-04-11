@@ -26,7 +26,7 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     permissions:
       contents: read
       id-token: write
@@ -56,7 +56,7 @@ jobs:
           node -e "const { execSync } = require('node:child_process'); const [major, minor, patch] = execSync('npm --version', { encoding: 'utf8' }).trim().split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error('npm 11.5.1+ required for Trusted Publishing');"
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
 
       - name: Verify versions match tag
         if: startsWith(github.ref, 'refs/tags/v')

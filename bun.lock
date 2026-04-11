@@ -14,35 +14,39 @@
     },
     "packages/core": {
       "name": "smart-fetch-core",
-      "version": "0.1.16",
+      "version": "0.2.1",
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "@thinkscape/wreq-js": "git+https://github.com/Thinkscape/wreq-js.git#d4851c1c82d6152df15f892b9db38b088b02443b",
+        "@thinkscape/wreq-js": "2.2.2",
         "defuddle": "^0.14.0",
         "linkedom": "^0.18.12",
       },
     },
     "packages/openclaw-smart-fetch": {
       "name": "openclaw-smart-fetch",
-      "version": "0.1.16",
+      "version": "0.2.1",
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "@thinkscape/wreq-js": "git+https://github.com/Thinkscape/wreq-js.git#d4851c1c82d6152df15f892b9db38b088b02443b",
+        "@thinkscape/wreq-js": "2.2.2",
         "defuddle": "^0.14.0",
         "linkedom": "^0.18.12",
-        "smart-fetch-core": "file:../core",
+      },
+      "devDependencies": {
+        "smart-fetch-core": "0.2.1",
       },
     },
     "packages/pi-smart-fetch": {
       "name": "pi-smart-fetch",
-      "version": "0.1.16",
+      "version": "0.2.1",
       "dependencies": {
         "@mariozechner/pi-tui": "^0.66.1",
         "@sinclair/typebox": "^0.34.49",
-        "@thinkscape/wreq-js": "git+https://github.com/Thinkscape/wreq-js.git#d4851c1c82d6152df15f892b9db38b088b02443b",
+        "@thinkscape/wreq-js": "2.2.2",
         "defuddle": "^0.14.0",
         "linkedom": "^0.18.12",
-        "smart-fetch-core": "file:../core",
+      },
+      "devDependencies": {
+        "smart-fetch-core": "0.2.1",
       },
       "peerDependencies": {
         "@mariozechner/pi-coding-agent": "*",
@@ -400,7 +404,7 @@
 
     "@smithy/uuid": ["@smithy/uuid@1.1.2", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-O/IEdcCUKkubz60tFbGA7ceITTAJsty+lBjNoorP4Z6XRqaFb/OjQjZODophEcuq68nKm6/0r+6/lLQ+XVpk8g=="],
 
-    "@thinkscape/wreq-js": ["@thinkscape/wreq-js@github:Thinkscape/wreq-js#d4851c1", {}, "Thinkscape-wreq-js-d4851c1"],
+    "@thinkscape/wreq-js": ["@thinkscape/wreq-js@2.2.2", "", { "os": [ "linux", "win32", "darwin", ], "cpu": [ "x64", "arm64", ] }, "sha512-JsjHiGxfLewbs2DyHeAT+n6yU7cgRLmpfW3K4sdPa3ovOnHRX6S51Dnn013avcOOzKcSZ8D5n9SOZQROrpcBoQ=="],
 
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "^4.4.3", "token-types": "^6.1.1" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 

@@ -8,6 +8,7 @@ type ReleaseKind = "patch" | "minor" | "major";
 type PackageJson = {
   version?: string;
   dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
 };
 
 const kind = process.argv[2] as ReleaseKind | undefined;
@@ -46,6 +47,10 @@ for (const relativePath of packagePaths) {
 
   if (pkg.dependencies?.["smart-fetch-core"]) {
     pkg.dependencies["smart-fetch-core"] = nextVersion;
+  }
+
+  if (pkg.devDependencies?.["smart-fetch-core"]) {
+    pkg.devDependencies["smart-fetch-core"] = nextVersion;
   }
 
   writeFileSync(path, `${JSON.stringify(pkg, null, 2)}\n`);

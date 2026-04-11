@@ -153,7 +153,7 @@ describeIf("integration: extraction pipeline", () => {
   it(
     "presents a browser-like TLS fingerprint",
     async () => {
-      const { fetch } = await import("wreq-js");
+      const { fetch } = await import("@thinkscape/wreq-js");
       const response = await fetch(TEST_URLS.browserLeaks, {
         browser: DEFAULT_BROWSER,
         os: DEFAULT_OS,

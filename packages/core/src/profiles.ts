@@ -1,4 +1,4 @@
-import { getProfiles } from "wreq-js";
+import { getProfiles } from "@thinkscape/wreq-js";
 import { DEFAULT_BROWSER } from "./constants";
 
 /** Get the latest Chrome profile available in wreq-js. */

@@ -1,0 +1,3 @@
+[submodule "forks/wreq-js"]
+	path = forks/wreq-js
+	url = https://github.com/Thinkscape/wreq-js.git

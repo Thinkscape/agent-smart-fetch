@@ -350,7 +350,65 @@ describe("createDefuddleFetch", () => {
     );
 
     expect(isError(result)).toBe(false);
-    expect(statuses).toEqual(["fetching", "extracting", "done"]);
+    expect(statuses).toEqual(["processing", "done"]);
+  });
+
+  it("maps native request events into weighted progress updates", async () => {
+    const progress: Array<{
+      status: string;
+      progress: number;
+      phase?: string;
+    }> = [];
+    const dependencies = createDependencies({
+      fetch: mock(async (_url: string, options: Record<string, unknown>) => {
+        const onRequestEvent = options.onRequestEvent as
+          | ((event: {
+              type: string;
+              contentLength?: number | null;
+              downloadedBytes?: number;
+            }) => void)
+          | undefined;
+        onRequestEvent?.({ type: "request_start" });
+        onRequestEvent?.({ type: "request_sent" });
+        onRequestEvent?.({ type: "response_headers", contentLength: 100 });
+        onRequestEvent?.({
+          type: "body_progress",
+          contentLength: 100,
+          downloadedBytes: 50,
+        });
+        onRequestEvent?.({
+          type: "body_complete",
+          contentLength: 100,
+          downloadedBytes: 100,
+        });
+        return createResponse();
+      }),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch(
+      { url: "https://example.com/article" },
+      {
+        onProgressChange(update) {
+          progress.push(update);
+        },
+      },
+    );
+
+    expect(isError(result)).toBe(false);
+    expect(progress.some((update) => update.phase === "request_start")).toBe(
+      true,
+    );
+    expect(progress.some((update) => update.status === "connecting")).toBe(
+      true,
+    );
+    expect(progress.some((update) => update.status === "waiting")).toBe(true);
+    expect(progress.some((update) => update.status === "loading")).toBe(true);
+    expect(progress.some((update) => update.phase === "extracting")).toBe(true);
+    expect(progress.some((update) => update.status === "processing")).toBe(
+      true,
+    );
+    expect(progress.at(-1)?.progress).toBe(1);
   });
 
   it("converts markdown output to plain text when format=text", async () => {

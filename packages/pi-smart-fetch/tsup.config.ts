@@ -7,13 +7,14 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   bundle: true,
+  noExternal: ["smart-fetch-core"],
   splitting: false,
   treeshake: true,
   external: [
     "@mariozechner/pi-coding-agent",
     "@sinclair/typebox",
+    "@thinkscape/wreq-js",
     "defuddle",
     "linkedom",
-    "wreq-js",
   ],
 });

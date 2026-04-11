@@ -152,8 +152,10 @@ export async function executeFetchToolCall(
 
 const PROGRESS_BY_STATUS: Record<BatchFetchItemStatus, number> = {
   queued: 0,
-  fetching: 0.35,
-  extracting: 0.75,
+  connecting: 0,
+  waiting: 0.11,
+  loading: 0.51,
+  processing: 0.96,
   done: 1,
   error: 1,
 };
@@ -167,6 +169,7 @@ function createInitialProgressItems(
       typeof request.url === "string" ? request.url : String(request.url ?? ""),
     status: "queued",
     progress: PROGRESS_BY_STATUS.queued,
+    statusStartedAt: Date.now(),
   }));
 }
 
@@ -232,11 +235,18 @@ export async function executeBatchFetchToolCall(
     index: number,
     status: BatchFetchItemStatus,
     error?: string,
+    progress?: number,
   ) => {
+    const previous = progressItems[index];
     progressItems[index] = {
-      ...progressItems[index],
+      ...previous,
       status,
-      progress: PROGRESS_BY_STATUS[status],
+      progress:
+        progress === undefined
+          ? PROGRESS_BY_STATUS[status]
+          : Math.max(0, Math.min(1, progress)),
+      statusStartedAt:
+        previous?.status === status ? previous.statusStartedAt : Date.now(),
       ...(error ? { error } : {}),
     };
     emitProgress();
@@ -264,6 +274,10 @@ export async function executeBatchFetchToolCall(
           onStatusChange(status) {
             if (status === "done") return;
             updateProgress(index, status);
+          },
+          onProgressChange(update) {
+            if (update.status === "done") return;
+            updateProgress(index, update.status, undefined, update.progress);
           },
         });
 

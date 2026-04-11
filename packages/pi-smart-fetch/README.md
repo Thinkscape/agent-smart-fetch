@@ -11,7 +11,7 @@ Registers 2 tools:
 ## Features
 
 Compared with naive Node.js `fetch()`, this package gives you:
-- **browser-like transport fingerprints** via `wreq-js`, which helps on sites that inspect TLS and HTTP client behavior
+- **browser-like transport fingerprints** via Thinkscape's maintained `@thinkscape/wreq-js` fork, which helps on sites that inspect TLS and HTTP client behavior
 - **clean readable extraction** via `Defuddle`, so agents get article content instead of raw noisy HTML
 - **better success on bot-defended pages** where plain server-side requests are blocked, challenged, or degraded
 - **useful metadata** like title, author, published date, site, and language when available

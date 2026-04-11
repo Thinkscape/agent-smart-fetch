@@ -29,6 +29,7 @@ import type {
   FetchError,
   FetchExecutionHooks,
   FetchOptions,
+  FetchProgressUpdate,
   FetchResult,
   OutputFormat,
 } from "./types";
@@ -117,7 +118,7 @@ function extractDomTextFallback(document: Document): string {
 }
 
 function escapeMarkdownText(value: string): string {
-  return value.replace(/([\\`*_{}\[\]()#+-.!|>])/g, "\\$1");
+  return value.replace(/([\\`*_{}[\]()+#.!|>-])/g, "\\$1");
 }
 
 function normalizeInlineWhitespace(value: string): string {
@@ -301,6 +302,63 @@ function extractDomMarkdownFallback(document: Document): string {
     .trim();
 }
 
+type WreqLikeRequestEvent = {
+  type?: string;
+  contentLength?: number | null;
+  downloadedBytes?: number;
+};
+
+function emitProgress(
+  hooks: FetchExecutionHooks,
+  update: FetchProgressUpdate,
+): void {
+  hooks.onProgressChange?.(update);
+}
+
+function emitStatus(
+  hooks: FetchExecutionHooks,
+  status: Exclude<FetchProgressUpdate["status"], never>,
+): void {
+  hooks.onStatusChange?.(status);
+}
+
+function mapRequestEventToProgress(
+  event: WreqLikeRequestEvent,
+): FetchProgressUpdate | null {
+  switch (event.type) {
+    case "request_start":
+      return { status: "connecting", progress: 0, phase: event.type };
+    case "request_sent":
+      return { status: "waiting", progress: 0.11, phase: event.type };
+    case "response_headers":
+      return { status: "loading", progress: 0.51, phase: event.type };
+    case "body_progress": {
+      const contentLength = event.contentLength;
+      const downloadedBytes = event.downloadedBytes ?? 0;
+      const bodyFraction =
+        contentLength && contentLength > 0
+          ? Math.max(0, Math.min(1, downloadedBytes / contentLength))
+          : Math.max(0, Math.min(1, downloadedBytes / 65536));
+      return {
+        status: "loading",
+        progress:
+          contentLength && contentLength > 0
+            ? 0.51 + bodyFraction * 0.44
+            : 0.51,
+        phase: event.type,
+      };
+    }
+    case "body_complete":
+      return { status: "loading", progress: 0.95, phase: event.type };
+    case "done":
+      return { status: "done", progress: 1, phase: event.type };
+    case "error":
+      return { status: "error", progress: 1, phase: event.type };
+    default:
+      return null;
+  }
+}
+
 function resolveAcceptHeader(format: OutputFormat): string {
   return format === "json" ? DEFAULT_JSON_ACCEPT_HEADER : DEFAULT_ACCEPT_HEADER;
 }
@@ -414,7 +472,18 @@ export function createDefuddleFetch(
       fetchOptions.proxy = opts.proxy;
     }
 
-    hooks.onStatusChange?.("fetching");
+    emitProgress(hooks, {
+      status: "connecting",
+      progress: 0,
+      phase: "fetch_start",
+    });
+    fetchOptions.onRequestEvent = (event: WreqLikeRequestEvent) => {
+      const mapped = mapRequestEventToProgress(event);
+      if (mapped) {
+        emitProgress(hooks, mapped);
+      }
+    };
+    fetchOptions.captureDiagnostics = true;
     const response = await dependencies.fetch(opts.url, fetchOptions);
 
     if (!response.ok) {
@@ -443,7 +512,12 @@ export function createDefuddleFetch(
         os,
       );
       if (!isError(result)) {
-        hooks.onStatusChange?.("done");
+        emitStatus(hooks, "done");
+        emitProgress(hooks, {
+          status: "done",
+          progress: 1,
+          phase: "json_done",
+        });
       }
       return result;
     }
@@ -459,7 +533,12 @@ export function createDefuddleFetch(
         os,
       );
       if (!isError(result)) {
-        hooks.onStatusChange?.("done");
+        emitStatus(hooks, "done");
+        emitProgress(hooks, {
+          status: "done",
+          progress: 1,
+          phase: "json_done",
+        });
       }
       return result;
     }
@@ -474,7 +553,12 @@ export function createDefuddleFetch(
         browser,
         os,
       );
-      hooks.onStatusChange?.("done");
+      emitStatus(hooks, "done");
+      emitProgress(hooks, {
+        status: "done",
+        progress: 1,
+        phase: "plain_text_done",
+      });
       return result;
     }
 
@@ -482,7 +566,12 @@ export function createDefuddleFetch(
       return { error: `Not an HTML page (content-type: ${contentType})` };
     }
 
-    hooks.onStatusChange?.("extracting");
+    emitStatus(hooks, "processing");
+    emitProgress(hooks, {
+      status: "processing",
+      progress: 0.96,
+      phase: "extracting",
+    });
     const fallbackDocument = parseLinkedomHTML(rawBody, finalUrl);
     const extractionDocument = parseLinkedomHTML(rawBody, finalUrl);
     const extracted = await dependencies.defuddle(
@@ -544,7 +633,8 @@ export function createDefuddleFetch(
       os,
     };
 
-    hooks.onStatusChange?.("done");
+    emitStatus(hooks, "done");
+    emitProgress(hooks, { status: "done", progress: 1, phase: "done" });
     return result;
   };
 }

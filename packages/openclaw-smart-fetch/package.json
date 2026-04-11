@@ -1,6 +1,6 @@
 {
   "name": "openclaw-smart-fetch",
-  "version": "0.1.16",
+  "version": "0.2.0",
   "type": "module",
   "description": "OpenClaw smart fetch plugin with browser-grade TLS fingerprinting and Defuddle extraction.",
   "license": "MIT",
@@ -67,8 +67,9 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
+    "smart-fetch-core": "0.2.0",
+    "@thinkscape/wreq-js": "git+https://github.com/Thinkscape/wreq-js.git#d4851c1c82d6152df15f892b9db38b088b02443b",
     "defuddle": "^0.14.0",
-    "linkedom": "^0.18.12",
-    "wreq-js": "^2.2.2"
+    "linkedom": "^0.18.12"
   }
 }

@@ -52,7 +52,11 @@ describe("createBatchFetchToolParameterProperties", () => {
 describe("executeBatchFetchToolCall", () => {
   it("preserves input ordering, reports progress, and carries per-item errors", async () => {
     const defaults = resolveFetchToolDefaults({ batchConcurrency: 2 });
-    const snapshots: Array<{ completed: number; statuses: string[] }> = [];
+    const snapshots: Array<{
+      completed: number;
+      statuses: string[];
+      progresses: number[];
+    }> = [];
 
     const result = await executeBatchFetchToolCall(
       {
@@ -68,10 +72,15 @@ describe("executeBatchFetchToolCall", () => {
           snapshots.push({
             completed: snapshot.completed,
             statuses: snapshot.items.map((item) => item.status),
+            progresses: snapshot.items.map((item) => item.progress),
           });
         },
         async executeItem(params, _runtimeDefaults, hooks) {
-          hooks?.onStatusChange?.("fetching");
+          hooks?.onProgressChange?.({
+            status: "connecting",
+            progress: 0.15,
+            phase: "request_sent",
+          });
           await new Promise((resolve) =>
             setTimeout(
               resolve,
@@ -83,7 +92,7 @@ describe("executeBatchFetchToolCall", () => {
             return { error: `HTTP 500 for ${params.url}` };
           }
 
-          hooks?.onStatusChange?.("extracting");
+          hooks?.onStatusChange?.("processing");
           return {
             url: params.url as string,
             finalUrl: params.url as string,
@@ -118,11 +127,15 @@ describe("executeBatchFetchToolCall", () => {
     );
     expect(snapshots[0]?.statuses).toEqual(["queued", "queued", "queued"]);
     expect(
-      snapshots.some((snapshot) => snapshot.statuses.includes("fetching")),
+      snapshots.some((snapshot) => snapshot.progresses.includes(0.15)),
+    ).toBe(true);
+    expect(
+      snapshots.some((snapshot) => snapshot.statuses.includes("connecting")),
     ).toBe(true);
     expect(snapshots.at(-1)).toEqual({
       completed: 3,
       statuses: ["done", "done", "error"],
+      progresses: [1, 1, 1],
     });
   });
 });

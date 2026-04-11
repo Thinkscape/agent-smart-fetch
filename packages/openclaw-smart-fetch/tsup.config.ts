@@ -7,7 +7,13 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   bundle: true,
+  noExternal: ["smart-fetch-core"],
   splitting: false,
   treeshake: true,
-  external: ["@sinclair/typebox", "defuddle", "linkedom", "wreq-js"],
+  external: [
+    "@sinclair/typebox",
+    "@thinkscape/wreq-js",
+    "defuddle",
+    "linkedom",
+  ],
 });

@@ -52,10 +52,24 @@ function truncateMiddle(value: string, width: number): string {
   return `${value.slice(0, left)}…${value.slice(value.length - right)}`;
 }
 
-function pad(value: string, width: number): string {
-  return value.length >= width
-    ? value.slice(0, width)
-    : value.padEnd(width, " ");
+function getOptimisticProgress(
+  item: BatchFetchItemProgress,
+  now: number,
+): number {
+  const base = item.progress;
+  const startedAt = item.statusStartedAt ?? now;
+  const elapsedWholeSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+
+  switch (item.status) {
+    case "connecting":
+      return Math.min(0.1, Math.max(base, elapsedWholeSeconds * 0.01));
+    case "waiting":
+      return Math.min(0.5, Math.max(base, 0.11 + elapsedWholeSeconds * 0.01));
+    case "processing":
+      return Math.min(0.99, Math.max(base, 0.96 + elapsedWholeSeconds * 0.01));
+    default:
+      return base;
+  }
 }
 
 function renderProgressBar(
@@ -63,27 +77,42 @@ function renderProgressBar(
   width: number,
   theme: {
     fg(color: string, value: string): string;
+    bg(color: string, value: string): string;
   },
+  now: number,
 ): string {
-  const innerWidth = Math.max(4, width - 2);
+  const innerWidth = Math.max(10, width - 2);
+  const progress = getOptimisticProgress(item, now);
   const filled = Math.max(
     0,
-    Math.min(innerWidth, Math.round(item.progress * innerWidth)),
+    Math.min(innerWidth, Math.round(progress * innerWidth)),
   );
-  const empty = Math.max(0, innerWidth - filled);
-  const barColor =
+  const barBgColor =
     item.status === "error"
-      ? "error"
+      ? "toolErrorBg"
       : item.status === "done"
-        ? "success"
+        ? "toolSuccessBg"
         : item.status === "queued"
-          ? "muted"
-          : "accent";
+          ? "toolPendingBg"
+          : "selectedBg";
+
+  const centeredLabel = (() => {
+    const raw = item.status;
+    if (raw.length >= innerWidth) {
+      return raw.slice(0, innerWidth);
+    }
+    const totalPadding = innerWidth - raw.length;
+    const leftPadding = Math.floor(totalPadding / 2);
+    const rightPadding = totalPadding - leftPadding;
+    return `${" ".repeat(leftPadding)}${raw}${" ".repeat(rightPadding)}`;
+  })();
+  const filledLabel = centeredLabel.slice(0, filled);
+  const emptyLabel = centeredLabel.slice(filled);
 
   return [
     theme.fg("muted", "["),
-    theme.fg(barColor, "█".repeat(filled)),
-    theme.fg("dim", "░".repeat(empty)),
+    theme.bg(barBgColor, theme.fg("text", filledLabel)),
+    theme.bg("toolPendingBg", theme.fg("muted", emptyLabel)),
     theme.fg("muted", "]"),
   ].join("");
 }
@@ -120,6 +149,7 @@ function renderBatchProgressText(
   theme: {
     bold(value: string): string;
     fg(color: string, value: string): string;
+    bg(color: string, value: string): string;
   },
   spinnerTick = 0,
 ): string {
@@ -131,33 +161,25 @@ function renderBatchProgressText(
     ),
   ].join("");
 
-  const availableRowWidth = Math.max(24, Math.floor(width * 0.8));
-  const statusWidth = 10;
+  const availableRowWidth = Math.max(24, width);
   const progressWidth = Math.max(
-    10,
-    Math.min(18, Math.floor(availableRowWidth * 0.25)),
+    12,
+    Math.min(18, Math.floor(availableRowWidth * 0.2)),
   );
   const glyphWidth = 2;
   const urlWidth = Math.max(
     12,
-    availableRowWidth - glyphWidth - statusWidth - progressWidth - 3,
+    availableRowWidth - glyphWidth - progressWidth - 2,
   );
+
+  const now = Date.now();
 
   const rows = snapshot.items.map((item, index) => {
     const glyph = renderStatusGlyph(item, spinnerTick + index, theme);
     const url = theme.fg("accent", truncateMiddle(item.url, urlWidth));
-    const statusColor =
-      item.status === "error"
-        ? "error"
-        : item.status === "done"
-          ? "success"
-          : item.status === "queued"
-            ? "muted"
-            : "warning";
-    const status = theme.fg(statusColor, pad(item.status, statusWidth));
-    const bar = renderProgressBar(item, progressWidth, theme);
+    const bar = renderProgressBar(item, progressWidth, theme, now);
 
-    const baseRow = `${glyph} ${url} ${status} ${bar}`;
+    const baseRow = `${glyph} ${url} ${bar}`;
     if (!expanded || !item.error) {
       return baseRow;
     }
@@ -174,6 +196,7 @@ function createResponsiveBatchComponent(
   theme: {
     bold(value: string): string;
     fg(color: string, value: string): string;
+    bg(color: string, value: string): string;
   },
 ) {
   const text = new Text("", 0, 0);

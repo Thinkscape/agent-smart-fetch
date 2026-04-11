@@ -7,7 +7,7 @@ It registers:
 - `batch_smart_fetch`
 
 It combines:
-- `wreq-js` for browser-like transport fingerprints
+- `@thinkscape/wreq-js` for browser-like transport fingerprints
 - `Defuddle` for readable content extraction
 
 ## Why use this instead of OpenClaw's built-in `web_fetch`

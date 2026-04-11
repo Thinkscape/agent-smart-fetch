@@ -4,6 +4,8 @@ Internal shared core for the `pi-smart-fetch` and `openclaw-smart-fetch` package
 
 It contains the reusable fetch/extract pipeline, shared request schema helpers, shared batch fan-out helpers, bounded-concurrency scheduling, and shared response formatting.
 
+The core now targets Thinkscape's maintained `@thinkscape/wreq-js` fork, which preserves the upstream fetch/session API shape while adding room for richer request diagnostics and transport-phase progress.
+
 ## Shared capabilities
 
 The core now covers both:
@@ -16,3 +18,4 @@ Batch behavior in the core:
 - per-item success and error states are modeled explicitly
 - per-item progress/status snapshots can be emitted for harnesses like pi
 - bounded concurrency defaults to `8` unless the harness overrides it via settings/config
+- weighted progress can be driven by transport events from the fetch layer, with early network milestones, body download, and final parsing contributing different fractions of total progress

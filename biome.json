@@ -17,7 +17,8 @@
       "!coverage",
       "!packages/*/dist",
       "!packages/*/coverage",
-      "!node_modules"
+      "!node_modules",
+      "!forks/wreq-js"
     ]
   },
   "javascript": {

@@ -3,8 +3,10 @@ export type FingerprintOs = "windows" | "macos" | "linux" | "android" | "ios";
 export type IncludeRepliesOption = boolean | "extractors";
 export type BatchFetchItemStatus =
   | "queued"
-  | "fetching"
-  | "extracting"
+  | "connecting"
+  | "waiting"
+  | "loading"
+  | "processing"
   | "done"
   | "error";
 
@@ -44,6 +46,7 @@ export interface BatchFetchItemProgress {
   url: string;
   status: BatchFetchItemStatus;
   progress: number;
+  statusStartedAt?: number;
   error?: string;
 }
 
@@ -128,6 +131,13 @@ export interface FetchToolDefaults {
   batchConcurrency: number;
 }
 
+export interface FetchProgressUpdate {
+  status: Exclude<BatchFetchItemStatus, "queued">;
+  progress: number;
+  phase?: string;
+}
+
 export interface FetchExecutionHooks {
   onStatusChange?(status: Exclude<BatchFetchItemStatus, "queued">): void;
+  onProgressChange?(update: FetchProgressUpdate): void;
 }

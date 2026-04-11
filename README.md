@@ -14,7 +14,7 @@ OpenClaw plugin, registers `smart_fetch` and `batch_smart_fetch` alongside the b
 
 ## Features
 
-- **browser-like transport fingerprints** via `wreq-js`, which helps on sites that inspect TLS and HTTP client behavior
+- **browser-like transport fingerprints** via Thinkscape's maintained `@thinkscape/wreq-js` fork, which helps on sites that inspect TLS and HTTP client behavior
 - **clean readable extraction** via `Defuddle`, so agents get article content instead of raw noisy HTML
 - **better success on bot-defended pages** where plain server-side requests are blocked, challenged, or degraded
 - **useful metadata** like title, author, published date, site, and language when available
@@ -23,6 +23,7 @@ OpenClaw plugin, registers `smart_fetch` and `batch_smart_fetch` alongside the b
 - **pi-specific behavior** including an optional `verbose` flag and defaults from pi settings
 - **bounded batch fan-out** with a configurable default concurrency of `8`
 - **a richer pi TUI for batch mode** with per-item rows, truncated URLs, statuses, and small progress bars
+- **request-phase progress support** wired through the core so richer transport events from the Thinkscape `wreq-js` fork can feed weighted progress updates
 - **lower overhead than browser automation** when you do not need JS execution, login, scrolling, or clicks
 - **clear limits**: it does not execute JavaScript or solve interactive anti-bot flows
 - **batch fetch support** with a configurable default concurrency of `8`

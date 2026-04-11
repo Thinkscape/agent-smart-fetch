@@ -1,8 +1,10 @@
 # pi-smart-fetch
 
-`pi-smart-fetch` adds smarter web fetching tools to pi.dev.
+`pi-smart-fetch` adds adaptive, agent-friendly web fetching tools to pi.dev.
 
-It registers:
+![pi Smart Fetch](demo.gif)
+
+Registers 2 tools:
 - `web_fetch`
 - `batch_web_fetch`
 

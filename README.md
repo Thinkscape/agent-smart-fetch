@@ -1,64 +1,32 @@
 # Agent Smart Fetch
 
-## Overview
-
 Better web fetching for agents.
 
-### [Smart Fetch for pi.dev](./packages/pi-smart-fetch/README.md) — pi.dev extension package, registers `web_fetch` and `batch_web_fetch`
-### [Smart Fetch for OpenClaw](./packages/openclaw-smart-fetch/README.md) — OpenClaw plugin package, registers `smart_fetch` and `batch_smart_fetch`
+## [Smart Fetch for pi.dev](./packages/pi-smart-fetch/README.md)
 
-## Why use Smart Fetch?
+Registers `web_fetch` and `batch_web_fetch` tools.
 
-### 1. `wreq-js` improves fetching on bot-defended sites
+## [Smart Fetch for OpenClaw](./packages/openclaw-smart-fetch/README.md)
 
-This repo uses `wreq-js` for network requests instead of relying on a naive Node.js HTTP stack.
+OpenClaw plugin, registers `smart_fetch` and `batch_smart_fetch` alongside the built-in `web_fetch` tool.
 
-Practical benefits:
-- **Browser-like TLS fingerprinting** — request handshakes look much closer to real browsers, which matters on sites that inspect TLS fingerprints.
-- **HTTP/2/browser impersonation** — helps avoid the classic mismatch where headers claim “Chrome” but the transport layer clearly does not.
-- **Better success rate on anti-bot protected pages** — especially where simple `fetch()` requests are challenged, blocked, or silently degraded.
-- **Lower overhead than full browser automation** — useful for readable-page fetching when you do not actually need JS execution, clicks, or logins.
-- **Configurable browser/OS profiles** — useful when a specific fingerprint works better against a target site.
+![pi Smart Fetch](packages/pi-smart-fetch/demo.gif)
 
-In short: it targets the class of failures where standard HTTP clients get flagged before content extraction even begins.
+## Features
 
-### 2. `Defuddle` turns messy pages into AI-friendly readable content
+- **browser-like transport fingerprints** via `wreq-js`, which helps on sites that inspect TLS and HTTP client behavior
+- **clean readable extraction** via `Defuddle`, so agents get article content instead of raw noisy HTML
+- **better success on bot-defended pages** where plain server-side requests are blocked, challenged, or degraded
+- **useful metadata** like title, author, published date, site, and language when available
+- **multiple output formats**: `markdown`, `html`, `text`, or `json`
+- **single and batch tools**: `web_fetch` for one URL, `batch_web_fetch` for many
+- **pi-specific behavior** including an optional `verbose` flag and defaults from pi settings
+- **bounded batch fan-out** with a configurable default concurrency of `8`
+- **a richer pi TUI for batch mode** with per-item rows, truncated URLs, statuses, and small progress bars
+- **lower overhead than browser automation** when you do not need JS execution, login, scrolling, or clicks
+- **clear limits**: it does not execute JavaScript or solve interactive anti-bot flows
+- **batch fetch support** with a configurable default concurrency of `8`
 
-This repo uses `Defuddle` after fetching the raw page.
-
-Practical benefits:
-- **Extracts the main article/page content** instead of returning the full noisy DOM.
-- **Removes clutter** like sidebars, nav, headers, footers, and other irrelevant chrome.
-- **Produces cleaner markdown/text/html** for downstream agent consumption.
-- **Preserves useful metadata** such as title, author, published date, site, and language when available.
-- **Reduces token waste** by giving agents the readable content instead of the entire page shell.
-
-In short: it optimizes fetched pages for analysis, summarization, RAG ingestion, and agent workflows.
-
-### 3. One shared core, multiple harness adapters
-
-This repo is built around a shared core with harness-specific adapters.
-
-Benefits:
-- **Consistent behavior across harnesses**
-- **Harness-appropriate tool names**
-  - pi → `web_fetch`, `batch_web_fetch`
-  - OpenClaw → `smart_fetch`, `batch_smart_fetch`
-- **Shared tests and fetch/extraction logic** without duplicating implementation
-- **Built-in batch fan-out** with bounded concurrency and clear per-item result labeling
-- **Future harness support** can be added without rewriting the core pipeline
-
-## Batch fetch support
-
-This repo now supports batch fetching in the shared core.
-
-Behavior:
-- each batch item accepts the same request parameters as the single-fetch tool
-- results are returned in input order
-- each item is clearly labeled by URL
-- per-item failures include a bot-friendly error string next to that item
-- execution uses bounded concurrency with a default of `8`
-- pi can stream per-item progress in the TUI while OpenClaw keeps batch reporting simple and final-result focused
 
 ## Monorepo commands
 

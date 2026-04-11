@@ -24,7 +24,7 @@ describe("resolvePluginDefaults", () => {
 });
 
 describe("plugin registration", () => {
-  it("registers smart_fetch and batch_smart_fetch tools and logs the configured defaults", () => {
+  it("registers smart_fetch and batch_smart_fetch tools", () => {
     const registeredTools: Array<{ name: string }> = [];
     const api: ToolRegistrationApi = {
       pluginConfig: {
@@ -43,9 +43,7 @@ describe("plugin registration", () => {
     expect(registeredTools.map((tool) => tool.name)).toEqual(
       expect.arrayContaining(["smart_fetch", "batch_smart_fetch"]),
     );
-    expect(api.logger.info).toHaveBeenCalledWith(
-      "smart_fetch tools registered (default: firefox_147/linux, batch concurrency: 6)",
-    );
+    expect(api.logger.info).not.toHaveBeenCalled();
   });
 
   it("surfaces invalid URL errors from the smart_fetch execution path", async () => {

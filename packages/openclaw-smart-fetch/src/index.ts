@@ -89,10 +89,6 @@ const plugin = {
         };
       },
     });
-
-    api.logger.info(
-      `smart_fetch tools registered (default: ${defaults.browser}/${defaults.os}, batch concurrency: ${defaults.batchConcurrency})`,
-    );
   },
 };
 

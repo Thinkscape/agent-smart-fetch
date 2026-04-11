@@ -24,6 +24,11 @@ interface RegisteredPiTool {
     content: Array<{ type: string; text: string }>;
     details?: Record<string, unknown>;
   }>;
+  renderCall?: (
+    args: Record<string, unknown>,
+    theme: RenderTheme,
+    context?: unknown,
+  ) => { render(width: number): string[] };
   renderResult?: (
     result: {
       content: Array<{ type: string; text: string }>;
@@ -139,9 +144,15 @@ describe("pi extension", () => {
     expect(response.details).toEqual({ error: true, verbose: false });
   });
 
-  it("renders web_fetch as a compact collapsed panel and full output when expanded", () => {
+  it("renders web_fetch call header, compact collapsed result, and full output when expanded", () => {
     const registeredTool = findTool("web_fetch");
     expect(registeredTool.renderResult).toBeDefined();
+
+    const callLines = registeredTool
+      .renderCall?.({ url: "https://example.com/article" }, testTheme)
+      .render(120);
+    const callText = callLines?.join("\n") ?? "";
+    expect(callText).toContain("web_fetch https://example.com/article");
 
     const result = {
       content: [

@@ -42,6 +42,18 @@ type WebFetchRenderDetails = {
   verbose?: boolean;
   maxChars?: number;
   fetchResult?: FetchResult;
+  started?: boolean;
+  status?:
+    | "connecting"
+    | "waiting"
+    | "loading"
+    | "processing"
+    | "done"
+    | "error";
+  progress?: number;
+  phase?: string;
+  url?: string;
+  spinnerTick?: number;
 };
 
 type BatchRenderDetails = {
@@ -257,6 +269,66 @@ function buildWebFetchCollapsedText(
   return parts.join("\n");
 }
 
+function renderSingleFetchProgressText(
+  details: WebFetchRenderDetails,
+  width: number,
+  theme: {
+    fg(color: string, value: string): string;
+    bg(color: string, value: string): string;
+  },
+) {
+  const status = details.status ?? "connecting";
+  const url =
+    details.url ??
+    details.fetchResult?.finalUrl ??
+    details.fetchResult?.url ??
+    "";
+  const item: BatchFetchItemProgress = {
+    index: 0,
+    url,
+    status,
+    progress: details.progress ?? 0,
+    statusStartedAt: Date.now(),
+  };
+
+  const availableRowWidth = Math.max(24, width);
+  const progressWidth = Math.max(
+    12,
+    Math.min(18, Math.floor(availableRowWidth * 0.2)),
+  );
+  const glyphWidth = 2;
+  const urlWidth = Math.max(
+    12,
+    availableRowWidth - glyphWidth - progressWidth - 2,
+  );
+
+  const glyph = renderStatusGlyph(item, details.spinnerTick ?? 0, theme);
+  const renderedUrl = theme.fg("accent", truncateMiddle(url, urlWidth));
+  const bar = renderProgressBar(item, progressWidth, theme, Date.now());
+
+  return `${glyph} ${renderedUrl} ${bar}`;
+}
+
+function createResponsiveSingleFetchProgressComponent(
+  details: WebFetchRenderDetails,
+  theme: {
+    fg(color: string, value: string): string;
+    bg(color: string, value: string): string;
+  },
+) {
+  const text = new Text("", 0, 0);
+
+  return {
+    render(width: number) {
+      text.setText(renderSingleFetchProgressText(details, width, theme));
+      return text.render(width);
+    },
+    invalidate() {
+      text.invalidate();
+    },
+  };
+}
+
 function createResponsiveBatchComponent(
   details: BatchRenderDetails,
   expanded: boolean,
@@ -307,35 +379,127 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       ),
     }),
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(
+      _toolCallId,
+      params: Record<string, unknown>,
+      _signal,
+      onUpdate,
+      ctx,
+    ) {
       const settings = await loadPiSmartFetchSettings(ctx.cwd, getAgentDir());
       const runtimeDefaults = resolveFetchToolDefaults(settings);
       const verbose =
         (params.verbose as boolean | undefined) ?? settings.verboseByDefault;
-      const result = await executeFetchToolCall(params, runtimeDefaults);
 
-      if (isError(result)) {
-        return {
-          content: [{ type: "text", text: `Error: ${result.error}` }],
-          details: { error: true, verbose },
-        };
-      }
-
-      return {
-        content: [
-          { type: "text", text: buildFetchResponseText(result, { verbose }) },
-        ],
-        details: {
-          verbose,
-          maxChars: runtimeDefaults.maxChars,
-          fetchResult: result,
-        } satisfies WebFetchRenderDetails,
+      let spinnerTick = 0;
+      let spinnerTimer: ReturnType<typeof setInterval> | null = null;
+      let latestDetails: WebFetchRenderDetails = {
+        verbose,
+        started: true,
+        status: "connecting",
+        progress: 0,
+        phase: "fetch_start",
+        url: typeof params.url === "string" ? params.url : undefined,
+        spinnerTick,
       };
+
+      const emitProgress = (details: WebFetchRenderDetails) => {
+        latestDetails = details;
+        onUpdate?.({
+          content: [
+            {
+              type: "text",
+              text: `Fetching ${details.url ?? params.url ?? "URL"}...`,
+            },
+          ],
+          details,
+        });
+      };
+
+      try {
+        spinnerTimer = setInterval(() => {
+          if (latestDetails.status === "done") {
+            return;
+          }
+          spinnerTick += 1;
+          emitProgress({
+            ...latestDetails,
+            spinnerTick,
+          });
+        }, SPINNER_INTERVAL_MS);
+
+        const result = await executeFetchToolCall(params, runtimeDefaults, {
+          onStatusChange(status) {
+            emitProgress({
+              ...latestDetails,
+              status,
+              progress:
+                latestDetails.progress ??
+                (status === "processing"
+                  ? 0.96
+                  : status === "loading"
+                    ? 0.51
+                    : status === "waiting"
+                      ? 0.11
+                      : 0),
+              spinnerTick,
+            });
+          },
+          onProgressChange(update) {
+            emitProgress({
+              ...latestDetails,
+              status: update.status,
+              progress: update.progress,
+              phase: update.phase,
+              spinnerTick,
+            });
+          },
+        });
+
+        if (isError(result)) {
+          return {
+            content: [{ type: "text", text: `Error: ${result.error}` }],
+            details: { error: true, verbose },
+          };
+        }
+
+        return {
+          content: [
+            { type: "text", text: buildFetchResponseText(result, { verbose }) },
+          ],
+          details: {
+            verbose,
+            maxChars: runtimeDefaults.maxChars,
+            fetchResult: result,
+            started: true,
+            status: "done",
+            progress: 1,
+            phase: "done",
+            url: result.finalUrl || result.url,
+            spinnerTick,
+          } satisfies WebFetchRenderDetails,
+        };
+      } finally {
+        if (spinnerTimer) {
+          clearInterval(spinnerTimer);
+        }
+      }
+    },
+
+    renderCall(args: Record<string, unknown>, theme) {
+      const url = typeof args.url === "string" ? args.url : "...";
+      return new Text(
+        `${theme.fg("toolTitle", "web_fetch")} ${theme.fg("accent", url)}`,
+        0,
+        0,
+      );
     },
 
     renderResult(result, { expanded, isPartial }, theme) {
       if (isPartial) {
-        return new Text(theme.fg("warning", "Fetching..."), 0, 0);
+        const details =
+          (result.details as WebFetchRenderDetails | undefined) ?? {};
+        return createResponsiveSingleFetchProgressComponent(details, theme);
       }
 
       const details =

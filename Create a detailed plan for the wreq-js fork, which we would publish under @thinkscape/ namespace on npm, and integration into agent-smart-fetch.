@@ -1,0 +1,149 @@
+# Plan
+
+## Context
+- We want a maintained fork of `wreq-js` published under the `@thinkscape/` npm namespace and integrated cleanly into `agent-smart-fetch`.
+- The immediate motivation is tighter control over transport behavior, release cadence, and observability than the upstream public API currently exposes.
+- `agent-smart-fetch` already depends on `wreq-js` in `packages/core/package.json`, and recent work in this repo shows growing need for richer request-phase visibility to support better TUI progress and debugging.
+- The fork should preserve the existing fetch/session/transport API shape where possible, so migration inside `agent-smart-fetch` stays low-risk.
+
+## Findings
+- Current dependency point:
+  - `packages/core/package.json` depends on `wreq-js`.
+  - `packages/core/src/dependencies.ts` imports `fetch` and `getProfiles` from `wreq-js` and injects them as runtime dependencies for the extraction pipeline.
+  - `packages/core/src/extract.ts` assumes a fetch-compatible surface and currently models only coarse lifecycle stages (`fetching`, `extracting`, `done`, `error`).
+- The public `wreq-js` API does **not** expose granular TCP/TLS lifecycle callbacks:
+  - `node_modules/wreq-js/dist/wreq-js.d.ts` exposes `fetch`, `createTransport`, `createSession`, `Response`, `Transport`, and `Session`, with controls like `timeout`, `connectTimeout`, `readTimeout`, `proxy`, `browser`, and `os`, but no status-event or timing callback API.
+  - The published docs at `wreq.sqdsh.win` confirm transport knobs but not request-phase tracing.
+- The private/native architecture is promising for a fork:
+  - `wreq-js` JS currently funnels requests through one native call: `nativeBinding.request(options, requestId, abortable)` in `dist/wreq-js.cjs`.
+  - The Rust addon source (`wreq-js/rust/src/lib.rs`, `wreq-js/rust/src/client.rs`) already tracks request IDs and cancellations, uses Neon + Tokio, and already has callback/channel patterns for WebSockets.
+  - That means the fork can plausibly add request progress/event callbacks keyed by request ID.
+- Upstream `wreq` already contains reusable internal hooks and metadata we could expose through the fork:
+  - `src/client.rs` supports `connect_timeout`, `read_timeout`, `connection_verbose`, and `tls_info` on `ClientBuilder`.
+  - `src/client/conn/verbose.rs` wraps connections and traces read/write I/O when tracing is enabled.
+  - `src/client/conn/http.rs` defines `HttpInfo` with `remote_addr` and `local_addr` and attaches it to response extensions.
+  - `src/client/conn/tls_info.rs` exposes peer certificate / chain via `TlsInfo` extensions.
+  - `src/client/response.rs` exposes `extensions()`, `local_addr()`, and `remote_addr()` on the Rust response type.
+  - `src/trace.rs` shows tracing macros already exist upstream, gated by feature flags.
+- Integration opportunities in this repo:
+  - `packages/core/src/dependencies.ts` is the main swap point from upstream `wreq-js` to `@thinkscape/wreq-js` (or similar final package name).
+  - `packages/core/src/types.ts` and `packages/core/src/extract.ts` are the right places to extend fetch hooks if the fork adds richer network-phase events.
+  - `packages/pi-smart-fetch/src/index.ts` already supports streaming tool updates and custom rendering, so it can consume finer-grained request status once the core exposes it.
+
+## Approach
+- Fork `wreq-js` with the smallest viable API break:
+  - preserve existing `fetch`/`createSession`/`createTransport` usage for compatibility
+  - add optional diagnostics/progress support rather than replacing the fetch API
+  - publish under `@thinkscape/` namespace
+- Implement the fork in two layers:
+  1. **Package/release layer** — rename/package/publish the fork under Thinkscape ownership.
+  2. **Observability layer** — extend the native bridge so requests can optionally emit structured lifecycle events and/or final diagnostics.
+- Recommended observability design for v1 of the fork:
+  - keep the default `fetch(url, init)` path working as-is
+  - add an optional callback/event mode for advanced callers
+  - expose coarse but true transport phases first, rather than trying to stream ultra-low-level TLS record details
+- Recommended event set for the fork:
+  - `dns_start`
+  - `dns_done`
+  - `connect_start`
+  - `connect_done`
+  - `tls_start`
+  - `tls_done`
+  - `request_sent`
+  - `response_headers`
+  - `body_progress`
+  - `done`
+  - `error`
+- Recommended progress weighting once the fork emits richer phases:
+  - reserve roughly **25%** of total progress for pre-body network work
+  - split that pre-body portion across early milestones such as DNS, TCP connect, TLS handshake, request sent, and response headers received
+  - allocate roughly **70%** of total progress to body download using byte-based progress when `content-length` is known (and a smooth heuristic/indeterminate ramp when it is not)
+  - reserve the final **5%** for response processing/parsing/extraction (`defuddle`, formatting, JSON parsing, etc.)
+  - keep `done` / `error` at 100%
+- Recommended diagnostics object for the fork (even if event streaming lands later):
+  - local/remote socket addresses
+  - timing summary (connect, TLS, first byte, total, body read)
+  - TLS/cert metadata where safely available
+  - negotiated ALPN / HTTP version if available from upstream `wreq`
+- Integrate the fork into `agent-smart-fetch` in phases:
+  1. Replace dependency/imports from `wreq-js` to the Thinkscape fork without changing behavior.
+  2. Add core support for optional richer transport-phase hooks.
+  3. Upgrade pi/OpenClaw renderers and diagnostics to consume the new statuses.
+
+## Files to modify
+- Fork/package work (new repo / external to this repo, but tracked for implementation):
+  - `wreq-js/package.json`
+  - `wreq-js/README.md`
+  - `wreq-js/rust/src/lib.rs`
+  - `wreq-js/rust/src/client.rs`
+  - possibly additional Rust bridge/types files if request event callbacks are added
+  - possibly upstream `wreq` fork files if deeper connector/TLS instrumentation is required:
+    - `src/client.rs`
+    - `src/client/conn/http.rs`
+    - `src/client/conn/connector.rs`
+    - `src/client/conn/tls_info.rs`
+    - `src/client/conn/verbose.rs`
+    - `src/client/response.rs`
+- In this repo:
+  - `packages/core/package.json`
+  - `packages/core/src/dependencies.ts`
+  - `packages/core/src/types.ts`
+  - `packages/core/src/extract.ts`
+  - `packages/core/src/tool.ts` if request-phase progress needs to flow into tool-level batch status
+  - `packages/pi-smart-fetch/src/index.ts`
+  - `packages/openclaw-smart-fetch/src/index.ts`
+  - relevant unit/integration tests and docs after the dependency switch
+
+## Reuse
+- In this repo:
+  - `packages/core/src/dependencies.ts` is the clean injection point for swapping the fetch implementation.
+  - `packages/core/src/extract.ts` already has `FetchExecutionHooks.onStatusChange`; extend this area into a richer progress abstraction rather than bolting progress logic directly into the adapters.
+  - `packages/pi-smart-fetch/src/index.ts` already renders coarse statuses and can reuse the same row model if the core starts emitting truer phases.
+- In upstream `wreq`:
+  - `ClientBuilder.connect_timeout()` and `ClientBuilder.read_timeout()` show that connect/read phase distinction already exists.
+  - `ClientBuilder.connection_verbose()` and `src/client/conn/verbose.rs` provide an existing path for lower-level I/O visibility.
+  - `TlsInfo` and `HttpInfo` show that some connection metadata is already attached to response extensions and could be surfaced by the fork.
+
+## Steps
+- [ ] Create the `wreq-js` fork under Thinkscape ownership and decide final package name (for example `@thinkscape/wreq-js`).
+- [ ] Update fork package metadata, npm scope, README, repository links, and build/publish workflow.
+- [ ] Inspect/add Neon-native request event plumbing in the fork:
+  - carry a JS callback or event sink into the native request path
+  - key updates by request ID
+  - preserve current cancellation behavior
+- [ ] Implement the first pass of structured request events in the fork, starting with the coarsest phases that map cleanly to the native request lifecycle.
+- [ ] Expose a final diagnostics payload in the fork where possible, reusing upstream `HttpInfo` / `TlsInfo` / timing capture.
+- [ ] Determine whether upstream `wreq` needs a companion fork/patch for DNS/TLS boundary instrumentation; if yes, vendor or fork only the minimum required pieces.
+- [ ] Switch `agent-smart-fetch` core dependency/imports from upstream `wreq-js` to the Thinkscape fork.
+- [ ] Add core support to translate fork request events into richer fetch progress hooks, not just one-word statuses.
+- [ ] Map fork request phases into weighted progress percentages:
+  - early network/setup milestones contribute small fractions of the first 25%
+  - body download consumes about 70% of the progress budget, ideally driven by bytes received
+  - parsing/extraction consumes the final 5%
+- [ ] Update pi/OpenClaw adapters to consume the richer weighted progress model without breaking existing output compatibility.
+- [ ] Add tests covering:
+  - dependency swap correctness
+  - backwards-compatible fetch behavior
+  - new diagnostics/event API in the fork
+  - core mapping from native fork events → fetch/tool progress states
+- [ ] Document fork ownership, upgrade path, and any new diagnostics/event APIs.
+
+## Verification
+- Fork repo:
+  - build native addon locally from source
+  - run upstream/fork test suite
+  - manually verify `fetch`, `createSession`, `createTransport`, cookies, proxying, and timeouts still behave compatibly
+  - add targeted tests for request event emission and diagnostics payloads
+- `agent-smart-fetch`:
+  - run `bun run test:core`
+  - run `bun run test:pi`
+  - run `bun run test:openclaw`
+  - run `bun run test`
+  - run `bun run build`
+  - manual smoke tests for slow requests / flaky HTTP targets / TLS failures to confirm event mapping is sensible
+
+## Decisions captured
+- The fork should preserve the current fetch-style surface and add observability as an **optional extension**, not a breaking replacement.
+- True request-phase observability cannot be added from JS alone; it requires changes in the native Rust bridge.
+- Progress in `agent-smart-fetch` should move from coarse stage buckets to a weighted model: about 25% pre-body network milestones, about 70% body download, and the final 5% processing/parsing.
+- Upstream `wreq` already appears to contain enough internal hooks/metadata that a Thinkscape fork is a realistic path to richer TCP/TLS lifecycle reporting.

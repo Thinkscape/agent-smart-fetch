@@ -198,6 +198,7 @@ describe("pi extension", () => {
       .renderResult?.(result, { expanded: false }, testTheme)
       .render(120);
     const collapsedText = collapsedLines?.join("\n") ?? "";
+    expect(collapsedText).toContain("web_fetch https://example.com/article");
     expect(collapsedText).toContain("> Title: Example Article");
     expect(collapsedText).toContain("# Example Article");
     expect(collapsedText).toContain("Line 6");

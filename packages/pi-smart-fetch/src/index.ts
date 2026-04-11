@@ -213,6 +213,11 @@ function buildWebFetchCollapsedText(
     return theme.fg("muted", "No fetch result available.");
   }
 
+  const headerLine =
+    theme.fg("toolTitle", "web_fetch") +
+    " " +
+    theme.fg("accent", fetchResult.finalUrl || fetchResult.url);
+
   const metadataLines: string[] = [];
   if (fetchResult.title) {
     metadataLines.push(theme.fg("muted", `> Title: ${fetchResult.title}`));
@@ -237,7 +242,7 @@ function buildWebFetchCollapsedText(
   const remainingLines = Math.max(0, contentLines.length - previewLines.length);
   const expandKey = keyText("app.tools.expand") || "Ctrl+O";
 
-  const parts: string[] = [];
+  const parts: string[] = [headerLine, ""];
   if (metadataLines.length > 0) {
     parts.push(...metadataLines, "");
   }

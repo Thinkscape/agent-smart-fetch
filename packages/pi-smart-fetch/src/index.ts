@@ -18,6 +18,7 @@ import {
   executeFetchToolCall,
   type FetchResult,
   isError,
+  isFileFetchResult,
   type OutputFormat,
   resolveFetchToolDefaults,
 } from "smart-fetch-core";
@@ -303,15 +304,32 @@ function createWebFetchResultComponent(
   }
 
   const metadataLines = buildWebFetchMetadataLines(details, theme);
-  const { previewContent, remainingLines } =
-    buildWebFetchCollapsedPreview(details);
-  const content = expanded ? fetchResult.content : previewContent;
-  const format = details.format ?? "markdown";
   const container = new Container();
 
   if (metadataLines.length > 0) {
     container.addChild(new Text(metadataLines.join("\n"), 0, 0));
   }
+
+  if (isFileFetchResult(fetchResult)) {
+    const fileLines = [
+      theme.fg("muted", `File size: ${fetchResult.fileSize}`),
+      ...(fetchResult.mimeType
+        ? [theme.fg("muted", `Mime type: ${fetchResult.mimeType}`)]
+        : []),
+      theme.fg("muted", `File path: ${fetchResult.filePath}`),
+    ];
+
+    if (metadataLines.length > 0 && fileLines.length > 0) {
+      container.addChild(new Spacer(1));
+    }
+    container.addChild(new Text(fileLines.join("\n"), 0, 0));
+    return container;
+  }
+
+  const { previewContent, remainingLines } =
+    buildWebFetchCollapsedPreview(details);
+  const content = expanded ? fetchResult.content : previewContent;
+  const format = details.format ?? "markdown";
 
   if (metadataLines.length > 0 && content) {
     container.addChild(new Spacer(1));

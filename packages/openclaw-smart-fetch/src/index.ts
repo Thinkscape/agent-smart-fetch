@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Type } from "@sinclair/typebox";
 import {
   buildBatchFetchResponseText,
@@ -13,7 +15,10 @@ import {
 import type { PluginConfig, ToolRegistrationApi } from "./types";
 
 export const resolvePluginDefaults = (pluginConfig: PluginConfig = {}) =>
-  resolveFetchToolDefaults(pluginConfig);
+  resolveFetchToolDefaults({
+    tempDir: join(tmpdir(), "smart-fetch-openclaw"),
+    ...pluginConfig,
+  });
 
 function renderToolResponse(result: FetchResult) {
   return {

@@ -15,6 +15,7 @@ describe("resolveFetchToolDefaults", () => {
       removeImages: false,
       includeReplies: "extractors",
       batchConcurrency: 8,
+      tempDir: undefined,
     });
   });
 
@@ -94,6 +95,7 @@ describe("executeBatchFetchToolCall", () => {
 
           hooks?.onStatusChange?.("processing");
           return {
+            kind: "content",
             url: params.url as string,
             finalUrl: params.url as string,
             title: `Title for ${params.url}`,

@@ -1,4 +1,8 @@
 import { describe, expect, it, mock } from "bun:test";
+import { mkdir, readFile, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Readable } from "node:stream";
 import {
   createDefuddleFetch,
   getLatestChromeProfile,
@@ -12,12 +16,26 @@ import type {
 
 function createResponse({
   contentType = "text/html; charset=utf-8",
+  contentDisposition = null,
   body = "<html><body><article><h1>Hello</h1><p>World</p></article></body></html>",
+  binaryBody,
   ...overrides
-}: Partial<FetchResponseLike> & {
+}: Omit<
+  Partial<FetchResponseLike>,
+  "body" | "text" | "arrayBuffer" | "readable"
+> & {
   contentType?: string;
+  contentDisposition?: string | null;
   body?: string;
+  binaryBody?: NodeJS.ArrayBufferView;
 } = {}): FetchResponseLike {
+  const binary = binaryBody
+    ? new Uint8Array(
+        binaryBody.buffer,
+        binaryBody.byteOffset,
+        binaryBody.byteLength,
+      )
+    : new TextEncoder().encode(body);
   return {
     ok: true,
     status: 200,
@@ -25,10 +43,19 @@ function createResponse({
     url: "https://example.com/final",
     headers: {
       get(name: string) {
-        return name.toLowerCase() === "content-type" ? contentType : null;
+        const normalized = name.toLowerCase();
+        if (normalized === "content-type") return contentType;
+        if (normalized === "content-disposition") return contentDisposition;
+        return null;
       },
     },
     text: async () => body,
+    arrayBuffer: async () =>
+      binary.buffer.slice(
+        binary.byteOffset,
+        binary.byteOffset + binary.byteLength,
+      ) as ArrayBuffer,
+    readable: () => Readable.from([binary]),
     ...overrides,
   };
 }
@@ -158,7 +185,7 @@ describe("createDefuddleFetch", () => {
     }
   });
 
-  it("returns an error for unsupported non-HTML and non-JSON content types", async () => {
+  it("streams unsupported non-text content types into a temp file", async () => {
     const dependencies = createDependencies({
       fetch: mock(async () =>
         createResponse({
@@ -171,12 +198,82 @@ describe("createDefuddleFetch", () => {
 
     const result = await defuddleFetch({
       url: "https://example.com/file.pdf",
+      tempDir: join(tmpdir(), `smart-fetch-pdf-${Date.now()}`),
     });
 
-    expect(result).toEqual({
-      error: "Not an HTML page (content-type: application/pdf)",
-    });
+    expect(isError(result)).toBe(false);
+    if (!isError(result) && result.kind === "file") {
+      expect(result.mimeType).toBe("application/pdf");
+      expect(result.filePath.endsWith("final.pdf")).toBe(true);
+    }
     expect(dependencies.defuddle).not.toHaveBeenCalled();
+  });
+
+  it("streams attachment responses into a temp file using a sanitized disposition filename", async () => {
+    const tempDir = join(tmpdir(), `smart-fetch-attachment-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const pdfBytes = new TextEncoder().encode("%PDF-1.7\nhello world\n");
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          contentType: "application/pdf",
+          contentDisposition:
+            "attachment; filename*=UTF-8''R%C3%A9sum%C3%A9%20Q1%2F2026.pdf",
+          binaryBody: pdfBytes,
+          body: "%PDF-1.7",
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/download",
+      tempDir,
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.kind).toBe("file");
+      if (result.kind === "file") {
+        expect(result.filePath.startsWith(tempDir)).toBe(true);
+        expect(result.filePath.endsWith("Resume-Q1-2026.pdf")).toBe(true);
+        expect(result.fileSize).toBe(pdfBytes.byteLength);
+        expect(result.mimeType).toBe("application/pdf");
+        const fileBytes = await readFile(result.filePath);
+        expect([...fileBytes]).toEqual([...pdfBytes]);
+        const fileStat = await stat(result.filePath);
+        expect(fileStat.mode & 0o111).toBe(0);
+      }
+    }
+    expect(dependencies.defuddle).not.toHaveBeenCalled();
+  });
+
+  it("streams non-text responses into a temp file using a filename derived from the URL", async () => {
+    const tempDir = join(tmpdir(), `smart-fetch-binary-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const dependencies = createDependencies({
+      fetch: mock(async () =>
+        createResponse({
+          url: "https://example.com/assets/r%C3%A9sum%C3%A9.png?download=1",
+          contentType: "image/png",
+          binaryBody: pngBytes,
+          body: "png",
+        }),
+      ),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/assets/r%C3%A9sum%C3%A9.png?download=1",
+      tempDir,
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result) && result.kind === "file") {
+      expect(result.filePath.endsWith("resume.png")).toBe(true);
+      expect([...(await readFile(result.filePath))]).toEqual([...pngBytes]);
+    }
   });
 
   it("returns an error when format=json does not receive JSON", async () => {

@@ -19,6 +19,7 @@ describe("resolvePiSmartFetchSettings", () => {
         smartFetchDefaultRemoveImages: false,
         smartFetchDefaultIncludeReplies: "extractors",
         smartFetchDefaultBatchConcurrency: 8,
+        smartFetchTempDir: "/tmp/global-fetch",
       },
       {
         smartFetchVerboseByDefault: false,
@@ -29,6 +30,7 @@ describe("resolvePiSmartFetchSettings", () => {
         smartFetchDefaultRemoveImages: true,
         smartFetchDefaultIncludeReplies: true,
         smartFetchDefaultBatchConcurrency: 3,
+        smartFetchTempDir: "/tmp/project-fetch",
       },
     );
 
@@ -41,6 +43,7 @@ describe("resolvePiSmartFetchSettings", () => {
       removeImages: true,
       includeReplies: true,
       batchConcurrency: 3,
+      tempDir: "/tmp/project-fetch",
     });
   });
 
@@ -68,6 +71,7 @@ describe("resolvePiSmartFetchSettings", () => {
       removeImages: undefined,
       includeReplies: undefined,
       batchConcurrency: undefined,
+      tempDir: join(tmpdir(), "smart-fetch-pi"),
     });
   });
 
@@ -90,6 +94,7 @@ describe("resolvePiSmartFetchSettings", () => {
       removeImages: undefined,
       includeReplies: undefined,
       batchConcurrency: 5,
+      tempDir: join(tmpdir(), "smart-fetch-pi"),
     });
   });
 });
@@ -115,6 +120,7 @@ describe("loadPiSmartFetchSettings", () => {
           smartFetchDefaultRemoveImages: false,
           smartFetchDefaultIncludeReplies: "extractors",
           smartFetchDefaultBatchConcurrency: 8,
+          smartFetchTempDir: "/tmp/global-fetch",
         },
         null,
         2,
@@ -128,6 +134,7 @@ describe("loadPiSmartFetchSettings", () => {
           smartFetchDefaultBrowser: "firefox_147",
           smartFetchDefaultRemoveImages: true,
           smartFetchDefaultBatchConcurrency: 4,
+          smartFetchTempDir: "/tmp/project-fetch",
         },
         null,
         2,
@@ -143,6 +150,7 @@ describe("loadPiSmartFetchSettings", () => {
       removeImages: true,
       includeReplies: "extractors",
       batchConcurrency: 4,
+      tempDir: "/tmp/project-fetch",
     });
   });
 });

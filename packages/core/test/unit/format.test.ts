@@ -88,6 +88,7 @@ describe("truncateContent", () => {
 
 describe("metadata formatting", () => {
   const result: FetchResult = {
+    kind: "content",
     url: "https://example.com/source",
     finalUrl: "https://example.com/final",
     title: "Example Article",
@@ -140,6 +141,35 @@ describe("metadata formatting", () => {
     );
     expect(buildFetchResponseText(result, { verbose: true })).toContain(
       "> Browser: chrome_145/windows",
+    );
+  });
+
+  it("buildFetchResponseText renders file download metadata without body content", () => {
+    const fileResult: FetchResult = {
+      kind: "file",
+      url: "https://example.com/source.pdf",
+      finalUrl: "https://example.com/final.pdf",
+      title: "",
+      author: "",
+      published: "",
+      site: "Example",
+      language: "",
+      wordCount: 0,
+      content: "",
+      browser: "chrome_145",
+      os: "windows",
+      filePath: "/tmp/example.pdf",
+      fileSize: 42,
+      mimeType: "application/pdf",
+    };
+
+    expect(buildFetchResponseText(fileResult)).toBe(
+      [
+        "> URL: https://example.com/final.pdf",
+        "> File size: 42",
+        "> Mime type: application/pdf",
+        "> File path: /tmp/example.pdf",
+      ].join("\n"),
     );
   });
 

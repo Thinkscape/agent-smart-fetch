@@ -67,8 +67,10 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
+    "@thinkscape/wreq-js": "2.2.5",
     "defuddle": "^0.14.0",
     "linkedom": "^0.18.12",
-    "@thinkscape/wreq-js": "2.2.5"
+    "lodash": "^4.17.21",
+    "mime-types": "^2.1.35"
   }
 }

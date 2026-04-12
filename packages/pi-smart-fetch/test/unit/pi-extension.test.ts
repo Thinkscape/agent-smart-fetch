@@ -227,6 +227,56 @@ describe("pi extension", () => {
     expect(expandedText).toContain("Line 9");
   });
 
+  it("renders compact attachment results without content preview", () => {
+    const registeredTool = findTool("web_fetch");
+    expect(registeredTool.renderResult).toBeDefined();
+
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: [
+            "> URL: https://example.com/file.pdf",
+            "> File size: 42",
+            "> Mime type: application/pdf",
+            "> File path: /tmp/file.pdf",
+          ].join("\n"),
+        },
+      ],
+      details: {
+        verbose: false,
+        format: "markdown",
+        maxChars: 50000,
+        fetchResult: {
+          kind: "file",
+          url: "https://example.com/file.pdf",
+          finalUrl: "https://example.com/file.pdf",
+          title: "",
+          author: "",
+          published: "",
+          site: "example.com",
+          language: "",
+          wordCount: 0,
+          content: "",
+          browser: "chrome_145",
+          os: "windows",
+          filePath: "/tmp/file.pdf",
+          fileSize: 42,
+          mimeType: "application/pdf",
+        },
+      },
+    };
+
+    const collapsedLines = registeredTool
+      .renderResult?.(result, { expanded: false }, testTheme)
+      .render(120);
+    const collapsedText = collapsedLines?.join("\n") ?? "";
+    expect(collapsedText).toContain("File size: 42");
+    expect(collapsedText).toContain("Mime type: application/pdf");
+    expect(collapsedText).toContain("File path: /tmp/file.pdf");
+    expect(collapsedText).not.toContain("Ctrl+O to expand");
+  });
+
   it("returns labeled per-item results and streams progress updates for batch_web_fetch", async () => {
     const registeredTool = findTool("batch_web_fetch");
     const cwd = await mkdtemp(

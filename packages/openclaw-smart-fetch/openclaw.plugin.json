@@ -41,6 +41,10 @@
         "type": "number",
         "description": "Maximum number of batch_smart_fetch requests to run concurrently (default: 8)",
         "default": 8
+      },
+      "tempDir": {
+        "type": "string",
+        "description": "Absolute temp directory used for attachment and binary downloads. If omitted, the plugin uses an OS temp subdirectory."
       }
     },
     "additionalProperties": false

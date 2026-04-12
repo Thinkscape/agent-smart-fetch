@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createWriteStream } from "node:fs";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, parse } from "node:path";
 import { pipeline } from "node:stream/promises";
@@ -204,6 +204,21 @@ function resolveDownloadTarget(
   };
 }
 
+async function cleanupPartialFile(filePath: string): Promise<void> {
+  try {
+    await unlink(filePath);
+  } catch (error) {
+    if (
+      !error ||
+      typeof error !== "object" ||
+      !("code" in error) ||
+      error.code !== "ENOENT"
+    ) {
+      throw error;
+    }
+  }
+}
+
 async function streamResponseToFile(
   response: FetchResponseLike,
   filePath: string,
@@ -214,18 +229,22 @@ async function streamResponseToFile(
   if (response.body) {
     const output = createWriteStream(filePath, { flags: "wx", mode: 0o600 });
     const reader = response.body.getReader();
-
-    await new Promise<void>((resolve, reject) => {
-      output.once("open", () => resolve());
-      output.once("error", reject);
-    });
-
-    const finished = new Promise<void>((resolve, reject) => {
-      output.once("finish", () => resolve());
-      output.once("error", reject);
-    });
+    let opened = false;
 
     try {
+      await new Promise<void>((resolve, reject) => {
+        output.once("open", () => {
+          opened = true;
+          resolve();
+        });
+        output.once("error", reject);
+      });
+
+      const finished = new Promise<void>((resolve, reject) => {
+        output.once("finish", () => resolve());
+        output.once("error", reject);
+      });
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
@@ -241,12 +260,32 @@ async function streamResponseToFile(
       }
       output.end();
       await finished;
+      await chmod(filePath, 0o600);
+      return fileSize;
+    } catch (error) {
+      output.destroy();
+      try {
+        await reader.cancel(
+          error instanceof Error ? error.message : String(error),
+        );
+      } catch {
+        // ignore cancellation failures during cleanup
+      }
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "EEXIST"
+      ) {
+        throw error;
+      }
+      if (opened) {
+        await cleanupPartialFile(filePath);
+      }
+      throw error;
     } finally {
       reader.releaseLock();
     }
-
-    await chmod(filePath, 0o600);
-    return fileSize;
   }
 
   if (response.readable) {
@@ -255,21 +294,47 @@ async function streamResponseToFile(
       fileSize +=
         typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.byteLength;
     });
-    await pipeline(
-      source,
-      createWriteStream(filePath, { flags: "wx", mode: 0o600 }),
-    );
-    await chmod(filePath, 0o600);
-    return fileSize;
+    try {
+      await pipeline(
+        source,
+        createWriteStream(filePath, { flags: "wx", mode: 0o600 }),
+      );
+      await chmod(filePath, 0o600);
+      return fileSize;
+    } catch (error) {
+      if (
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        error.code === "EEXIST"
+      ) {
+        throw error;
+      }
+      await cleanupPartialFile(filePath);
+      throw error;
+    }
   }
 
   const body = response.arrayBuffer
     ? new Uint8Array(await response.arrayBuffer())
     : new TextEncoder().encode(await response.text());
   fileSize = body.byteLength;
-  await writeFile(filePath, body, { mode: 0o600, flag: "wx" });
-  await chmod(filePath, 0o600);
-  return fileSize;
+  try {
+    await writeFile(filePath, body, { mode: 0o600, flag: "wx" });
+    await chmod(filePath, 0o600);
+    return fileSize;
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "EEXIST"
+    ) {
+      throw error;
+    }
+    await cleanupPartialFile(filePath);
+    throw error;
+  }
 }
 
 function isPlainTextContentType(contentType: string): boolean {

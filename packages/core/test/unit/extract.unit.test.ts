@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -19,12 +19,14 @@ function createResponse({
   contentDisposition = null,
   body = "<html><body><article><h1>Hello</h1><p>World</p></article></body></html>",
   binaryBody,
+  responseBody,
   ...overrides
 }: Omit<Partial<FetchResponseLike>, "body" | "text" | "arrayBuffer"> & {
   contentType?: string;
   contentDisposition?: string | null;
   body?: string;
   binaryBody?: NodeJS.ArrayBufferView;
+  responseBody?: ReadableStream<Uint8Array> | null;
 } = {}): FetchResponseLike {
   const binary = binaryBody
     ? new Uint8Array(
@@ -52,6 +54,7 @@ function createResponse({
         binary.byteOffset,
         binary.byteOffset + binary.byteLength,
       ) as ArrayBuffer,
+    body: responseBody,
     readable: () => Readable.from([binary]),
     ...overrides,
   };
@@ -304,6 +307,56 @@ describe("createDefuddleFetch", () => {
     }
   });
 
+  it("removes partial temp files when a readable-stream download times out", async () => {
+    const tempDir = join(
+      tmpdir(),
+      `smart-fetch-timeout-readable-${Date.now()}`,
+    );
+    await mkdir(tempDir, { recursive: true });
+    const dependencies = createDependencies({
+      fetch: mock(async (_url: string, options: Record<string, unknown>) => {
+        const onRequestEvent = options.onRequestEvent as
+          | ((event: Record<string, unknown>) => void)
+          | undefined;
+        onRequestEvent?.({ type: "request_start" });
+        onRequestEvent?.({ type: "request_sent" });
+        onRequestEvent?.({
+          type: "response_headers",
+          status: 200,
+          url: "https://example.com/file.dat",
+          contentLength: 10 * 1024 * 1024,
+        });
+        onRequestEvent?.({
+          type: "body_progress",
+          downloadedBytes: 1024,
+          contentLength: 10 * 1024 * 1024,
+        });
+
+        return createResponse({
+          url: "https://example.com/file.dat",
+          contentType: "application/octet-stream",
+          readable: () =>
+            new Readable({
+              read() {
+                this.push(Buffer.alloc(1024));
+                this.destroy(new Error("operation timed out"));
+              },
+            }),
+        });
+      }),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/file.dat",
+      timeoutMs: 15_000,
+      tempDir,
+    });
+
+    expect(isError(result)).toBe(true);
+    expect(await readdir(tempDir)).toEqual([]);
+  });
+
   it("returns timeout metadata when a binary download times out mid-stream", async () => {
     const tempDir = join(tmpdir(), `smart-fetch-timeout-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
@@ -360,6 +413,53 @@ describe("createDefuddleFetch", () => {
       });
       expect(result.error).toContain("while downloading");
     }
+  });
+
+  it("removes partial temp files when a web-stream download times out", async () => {
+    const tempDir = join(tmpdir(), `smart-fetch-timeout-body-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const dependencies = createDependencies({
+      fetch: mock(async (_url: string, options: Record<string, unknown>) => {
+        const onRequestEvent = options.onRequestEvent as
+          | ((event: Record<string, unknown>) => void)
+          | undefined;
+        onRequestEvent?.({ type: "request_start" });
+        onRequestEvent?.({ type: "request_sent" });
+        onRequestEvent?.({
+          type: "response_headers",
+          status: 200,
+          url: "https://example.com/file.dat",
+          contentLength: 10 * 1024 * 1024,
+        });
+        onRequestEvent?.({
+          type: "body_progress",
+          downloadedBytes: 1024,
+          contentLength: 10 * 1024 * 1024,
+        });
+
+        return createResponse({
+          url: "https://example.com/file.dat",
+          contentType: "application/octet-stream",
+          responseBody: new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new Uint8Array(1024));
+              controller.error(new Error("operation timed out"));
+            },
+          }),
+          readable: undefined,
+        });
+      }),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/file.dat",
+      timeoutMs: 15_000,
+      tempDir,
+    });
+
+    expect(isError(result)).toBe(true);
+    expect(await readdir(tempDir)).toEqual([]);
   });
 
   it("returns an error when format=json does not receive JSON", async () => {

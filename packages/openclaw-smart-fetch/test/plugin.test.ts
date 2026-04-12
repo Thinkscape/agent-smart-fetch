@@ -1,4 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import plugin, { resolvePluginDefaults } from "../src/index";
 import type { ToolRegistrationApi } from "../src/types";
 
@@ -19,6 +21,7 @@ describe("resolvePluginDefaults", () => {
       removeImages: true,
       includeReplies: "extractors",
       batchConcurrency: 3,
+      tempDir: join(tmpdir(), "smart-fetch-openclaw"),
     });
   });
 });

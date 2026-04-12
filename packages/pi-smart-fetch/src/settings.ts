@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type {
@@ -24,6 +25,7 @@ interface PiSmartFetchSettings {
   smartFetchDefaultRemoveImages?: boolean;
   smartFetchDefaultIncludeReplies?: IncludeRepliesOption;
   smartFetchDefaultBatchConcurrency?: number;
+  smartFetchTempDir?: string;
 }
 
 export interface ResolvedPiSmartFetchSettings extends FetchToolConfig {
@@ -133,6 +135,10 @@ function normalizePiSmartFetchSettings(input: unknown): PiSmartFetchSettings {
       "smartFetchDefaultBatchConcurrency",
       "webFetchDefaultBatchConcurrency",
     ]),
+    smartFetchTempDir: readNonEmptyString(source, [
+      "smartFetchTempDir",
+      "webFetchTempDir",
+    ]),
   };
 }
 
@@ -164,6 +170,10 @@ export function resolvePiSmartFetchSettings(
     batchConcurrency:
       project.smartFetchDefaultBatchConcurrency ??
       global.smartFetchDefaultBatchConcurrency,
+    tempDir:
+      project.smartFetchTempDir ??
+      global.smartFetchTempDir ??
+      join(tmpdir(), "smart-fetch-pi"),
   };
 }
 

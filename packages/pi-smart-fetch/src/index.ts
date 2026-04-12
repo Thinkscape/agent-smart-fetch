@@ -17,6 +17,7 @@ import {
   executeFetchToolCall,
   type FetchResult,
   isError,
+  isFileFetchResult,
   resolveFetchToolDefaults,
 } from "smart-fetch-core";
 import { loadPiSmartFetchSettings } from "./settings";
@@ -238,6 +239,22 @@ function buildWebFetchCollapsedText(
     metadataLines.push(theme.fg("muted", `> Author: ${fetchResult.author}`));
   }
 
+  const parts: string[] = [];
+  if (metadataLines.length > 0) {
+    parts.push(...metadataLines);
+  }
+
+  if (isFileFetchResult(fetchResult)) {
+    parts.push(
+      theme.fg("muted", `> File size: ${fetchResult.fileSize}`),
+      ...(fetchResult.mimeType
+        ? [theme.fg("muted", `> Mime type: ${fetchResult.mimeType}`)]
+        : []),
+      theme.fg("muted", `> File path: ${fetchResult.filePath}`),
+    );
+    return parts.join("\n");
+  }
+
   const contentLines = fetchResult.content
     .split("\n")
     .filter(
@@ -249,9 +266,8 @@ function buildWebFetchCollapsedText(
   const remainingLines = Math.max(0, contentLines.length - previewLines.length);
   const expandKey = keyText("app.tools.expand") || "Ctrl+O";
 
-  const parts: string[] = [];
   if (metadataLines.length > 0) {
-    parts.push(...metadataLines, "");
+    parts.push("");
   }
 
   if (previewLines.length > 0) {

@@ -21,9 +21,10 @@ export interface FetchOptions {
   includeReplies?: IncludeRepliesOption;
   proxy?: string;
   timeoutMs?: number;
+  tempDir?: string;
 }
 
-export interface FetchResult {
+interface BaseFetchResult {
   url: string;
   finalUrl: string;
   title: string;
@@ -32,10 +33,24 @@ export interface FetchResult {
   site: string;
   language: string;
   wordCount: number;
-  content: string;
   browser: string;
   os: string;
 }
+
+export interface ContentFetchResult extends BaseFetchResult {
+  kind: "content";
+  content: string;
+}
+
+export interface FileFetchResult extends BaseFetchResult {
+  kind: "file";
+  content: "";
+  filePath: string;
+  fileSize: number;
+  mimeType?: string;
+}
+
+export type FetchResult = ContentFetchResult | FileFetchResult;
 
 export interface FetchError {
   error: string;
@@ -95,7 +110,10 @@ export interface FetchResponseLike {
   headers: {
     get(name: string): string | null;
   };
+  body?: ReadableStream<Uint8Array> | null;
   text(): Promise<string>;
+  arrayBuffer?(): Promise<ArrayBuffer>;
+  readable?(): NodeJS.ReadableStream;
 }
 
 export interface FetchDependencies {
@@ -119,6 +137,7 @@ export interface FetchToolConfig {
   removeImages?: boolean;
   includeReplies?: IncludeRepliesOption;
   batchConcurrency?: number;
+  tempDir?: string;
 }
 
 export interface FetchToolDefaults {
@@ -129,6 +148,7 @@ export interface FetchToolDefaults {
   removeImages: boolean;
   includeReplies: IncludeRepliesOption;
   batchConcurrency: number;
+  tempDir?: string;
 }
 
 export interface FetchProgressUpdate {

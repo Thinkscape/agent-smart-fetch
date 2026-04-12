@@ -8,8 +8,11 @@ declare module "@thinkscape/wreq-js" {
     statusText: string;
     url?: string;
     headers: { get(name: string): string | null };
+    body?: ReadableStream<Uint8Array> | null;
     text(): Promise<string>;
     json(): Promise<unknown>;
+    arrayBuffer?(): Promise<ArrayBuffer>;
+    readable?(): NodeJS.ReadableStream;
   }>;
 
   export function getProfiles(): string[];

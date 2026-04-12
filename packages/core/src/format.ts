@@ -6,6 +6,12 @@ import type {
   OutputFormat,
 } from "./types";
 
+export function isFileFetchResult(
+  result: FetchResult,
+): result is Extract<FetchResult, { kind: "file" }> {
+  return result.kind === "file";
+}
+
 function buildHeader(
   parts: Array<[label: string, value: string | number | undefined]>,
 ) {
@@ -33,6 +39,15 @@ export function truncateContent(content: string, maxChars: number): string {
 }
 
 export function buildCompactMetadataHeader(result: FetchResult): string {
+  if (isFileFetchResult(result)) {
+    return buildHeader([
+      ["URL", result.finalUrl],
+      ["File size", result.fileSize],
+      ["Mime type", result.mimeType],
+      ["File path", result.filePath],
+    ]);
+  }
+
   return buildHeader([
     ["URL", result.finalUrl],
     ["Title", result.title],
@@ -42,6 +57,16 @@ export function buildCompactMetadataHeader(result: FetchResult): string {
 }
 
 export function buildMetadataHeader(result: FetchResult): string {
+  if (isFileFetchResult(result)) {
+    return buildHeader([
+      ["URL", result.finalUrl],
+      ["File size", result.fileSize],
+      ["Mime type", result.mimeType],
+      ["File path", result.filePath],
+      ["Browser", `${result.browser}/${result.os}`],
+    ]);
+  }
+
   return buildHeader([
     ["URL", result.finalUrl],
     ["Title", result.title],
@@ -61,6 +86,10 @@ export function buildFetchResponseText(
   const header = options.verbose
     ? buildMetadataHeader(result)
     : buildCompactMetadataHeader(result);
+
+  if (isFileFetchResult(result)) {
+    return header;
+  }
 
   return header ? `${header}\n\n${result.content}` : result.content;
 }

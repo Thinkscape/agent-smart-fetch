@@ -41,6 +41,7 @@ export function resolveFetchToolDefaults(
     removeImages: config.removeImages ?? false,
     includeReplies: config.includeReplies ?? DEFAULT_INCLUDE_REPLIES,
     batchConcurrency: resolveBatchConcurrency(config.batchConcurrency),
+    tempDir: config.tempDir,
   };
 }
 
@@ -139,6 +140,7 @@ function buildFetchOptionsFromParams(
       defaults.includeReplies,
     proxy: params.proxy as string | undefined,
     timeoutMs: defaults.timeoutMs,
+    tempDir: defaults.tempDir,
   };
 }
 

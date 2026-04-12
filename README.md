@@ -20,13 +20,23 @@ OpenClaw plugin, registers `smart_fetch` and `batch_smart_fetch` alongside the b
 - **useful metadata** like title, author, published date, site, and language when available
 - **multiple output formats**: `markdown`, `html`, `text`, or `json`
 - **single and batch tools**: `web_fetch` for one URL, `batch_web_fetch` for many
-- **pi-specific behavior** including an optional `verbose` flag and defaults from pi settings
 - **bounded batch fan-out** with a configurable default concurrency of `8`
-- **a richer pi TUI for batch mode** with per-item rows, truncated URLs, statuses, and small progress bars
 - **request-phase progress support** wired through the core so richer transport events from the Thinkscape `wreq-js` fork can feed weighted progress updates
+- **animated pi batch progress** with timer-driven spinner refreshes and weighted per-item progress
+- **attachment and binary download support** for `Content-Disposition: attachment` and non-text content types, streamed into temp files instead of being forced through Defuddle
+- **sanitized temp-file naming** derived from `Content-Disposition`, URL path segments, or UUID fallback, with deburring and extension normalization
+- **consumer-provided temp directories** so pi/OpenClaw can control where downloaded files land
+- **pi-specific behavior** including an optional `verbose` flag, richer TUI rendering, and defaults from pi settings
+- **publish-ready workspace tooling** with broader unit coverage, typechecking, build checks, and pack-install smoke tests
 - **lower overhead than browser automation** when you do not need JS execution, login, scrolling, or clicks
 - **clear limits**: it does not execute JavaScript or solve interactive anti-bot flows
-- **batch fetch support** with a configurable default concurrency of `8`
+
+## Recent feature additions
+
+Recent `feat:` work in this repo added:
+- **attachment + binary streaming** via temp files with file metadata returned to the caller
+- **animated batch spinner updates in the pi TUI** so long-running batches continue to feel alive
+- **publish-ready TypeScript/tooling/test infrastructure** across the monorepo
 
 
 ## Monorepo commands

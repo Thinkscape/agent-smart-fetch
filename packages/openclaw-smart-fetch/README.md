@@ -21,6 +21,8 @@ Typical advantages:
 - **better article/document readability** for downstream agent analysis
 - **useful metadata** like title, author, published date, site, and language when available
 - **batch fan-out support** when you want to fetch multiple URLs in one tool call
+- **attachment and binary download support** when a server returns `Content-Disposition: attachment` or a non-text content type
+- **temp-file output** with sanitized filenames and file metadata instead of trying to render binary bytes as page text
 
 A good rule of thumb:
 - use built-in `web_fetch` for simple pages
@@ -103,6 +105,15 @@ For `batch_smart_fetch`, `requests` is an array of objects, and **each item acce
 This is the cleaned readable content extracted from the page.
 ```
 
+### `smart_fetch` attachment/binary output
+
+```text
+> URL: https://example.com/download/report
+> File size: 999999
+> Mime type: application/pdf
+> File path: /absolute/path/to/temp/report.pdf
+```
+
 ### `batch_smart_fetch`
 
 ```text
@@ -165,8 +176,11 @@ Configurable defaults include:
 - `removeImages`
 - `includeReplies`
 - `batchConcurrency`
+- `tempDir`
 
 `batchConcurrency` defaults to `8` and controls how many `batch_smart_fetch` requests run concurrently.
+
+`tempDir` lets the OpenClaw consumer choose where attachment/binary downloads are written before the tool returns their absolute file paths.
 
 ## When not to use it
 
@@ -177,3 +191,10 @@ Do not use these tools when:
 - a full browser session is required
 
 In those cases, use browser automation instead.
+
+## Recent feature additions reflected here
+
+Recent `feat:` work added:
+- publish-ready TS/test/build packaging workflow across the monorepo
+- richer animated batch progress behavior in pi-facing consumers
+- attachment and binary download streaming with sanitized temp-file output

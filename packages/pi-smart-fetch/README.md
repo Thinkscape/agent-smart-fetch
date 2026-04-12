@@ -19,7 +19,10 @@ Compared with naive Node.js `fetch()`, this package gives you:
 - **single and batch tools**: `web_fetch` for one URL, `batch_web_fetch` for many
 - **pi-specific behavior** including an optional `verbose` flag and defaults from pi settings
 - **bounded batch fan-out** with a configurable default concurrency of `8`
-- **a richer pi TUI for batch mode** with per-item rows, truncated URLs, statuses, and small progress bars
+- **a richer pi TUI for batch mode** with per-item rows, truncated URLs, statuses, small progress bars, and timer-driven spinner animation
+- **attachment and binary download support** when a response is an attachment or non-text payload
+- **temp-file output** with sanitized filenames plus returned file metadata (`URL`, `File size`, `Mime type`, `File path`)
+- **publish-ready packaging/test workflow** across the monorepo for safer releases
 - **lower overhead than browser automation** when you do not need JS execution, login, scrolling, or clicks
 - **clear limits**: it does not execute JavaScript or solve interactive anti-bot flows
 
@@ -128,6 +131,15 @@ This is the cleaned readable content extracted from the page.
 It includes the same body content, but with a richer metadata header.
 ```
 
+### Attachment/binary `web_fetch` output
+
+```text
+> URL: https://example.com/download/report
+> File size: 999999
+> Mime type: application/pdf
+> File path: /absolute/path/to/temp/report.pdf
+```
+
 ### `batch_web_fetch` output
 
 ```text
@@ -195,7 +207,8 @@ Optional custom settings in `~/.pi/agent/settings.json` or `.pi/settings.json`:
   "smartFetchDefaultOs": "windows",
   "smartFetchDefaultRemoveImages": false,
   "smartFetchDefaultIncludeReplies": "extractors",
-  "smartFetchDefaultBatchConcurrency": 8
+  "smartFetchDefaultBatchConcurrency": 8,
+  "smartFetchTempDir": "/tmp/smart-fetch-pi"
 }
 ```
 
@@ -208,12 +221,14 @@ Behavior:
 - `smartFetchDefaultRemoveImages` sets the default for image stripping
 - `smartFetchDefaultIncludeReplies` sets the default replies/comments behavior
 - `smartFetchDefaultBatchConcurrency` sets the default bounded concurrency for `batch_web_fetch`
+- `smartFetchTempDir` sets the base temp directory used for attachments and binary downloads
 - project `.pi/settings.json` overrides global `~/.pi/agent/settings.json`
 
 Legacy aliases still supported:
 - `webFetchVerboseByDefault`
 - `webFetchDefaultMaxChars`
 - `webFetchDefaultBatchConcurrency`
+- `webFetchTempDir`
 
 ## When not to use it
 
@@ -224,3 +239,10 @@ Do not use these tools when:
 - you need a fully interactive browser session
 
 In those cases, switch to browser automation.
+
+## Recent feature additions reflected here
+
+Recent `feat:` work added:
+- publish-ready TS tooling, tests, and packaging checks
+- timer-driven spinner animation for batch progress in the pi TUI
+- attachment and binary streaming into temp files with sanitized output paths

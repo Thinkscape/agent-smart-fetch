@@ -14,6 +14,7 @@ function run(command: string) {
 }
 
 run("bun run check");
+run("bun run verify:clean-install");
 run(`bun run scripts/version.ts ${kind}`);
 run("bun run format");
 

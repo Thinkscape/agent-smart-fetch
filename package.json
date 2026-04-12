@@ -34,6 +34,7 @@
     "format": "bunx biome format --write .",
     "format:check": "bunx biome check --formatter-enabled=true --linter-enabled=false --assist-enabled=false .",
     "typecheck": "bun run typecheck:core && bun run typecheck:pi && bun run typecheck:openclaw",
+    "verify:clean-install": "bun run scripts/verify-clean-install.ts",
     "typecheck:core": "cd packages/core && bun run typecheck",
     "typecheck:pi": "cd packages/pi-smart-fetch && bun run typecheck",
     "typecheck:openclaw": "cd packages/openclaw-smart-fetch && bun run typecheck",
@@ -66,6 +67,7 @@
     "@mariozechner/pi-coding-agent": "^0.66.1",
     "@types/bun": "^1.3.11",
     "@types/lodash": "^4.17.24",
+    "@types/mime-types": "^3.0.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.2"
   }

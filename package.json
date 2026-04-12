@@ -1,7 +1,7 @@
 {
   "name": "agent-smart-fetch",
   "private": true,
-  "version": "0.2.11",
+  "version": "0.2.12",
   "type": "module",
   "description": "Bun monorepo for smart web fetching across pi and OpenClaw.",
   "license": "MIT",

@@ -14,31 +14,31 @@
     },
     "packages/core": {
       "name": "smart-fetch-core",
-      "version": "0.2.3",
+      "version": "0.2.9",
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "@thinkscape/wreq-js": "2.2.3",
+        "@thinkscape/wreq-js": "2.2.5",
         "defuddle": "^0.14.0",
         "linkedom": "^0.18.12",
       },
     },
     "packages/openclaw-smart-fetch": {
       "name": "openclaw-smart-fetch",
-      "version": "0.2.3",
+      "version": "0.2.9",
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
-        "@thinkscape/wreq-js": "2.2.3",
+        "@thinkscape/wreq-js": "2.2.5",
         "defuddle": "^0.14.0",
         "linkedom": "^0.18.12",
       },
     },
     "packages/pi-smart-fetch": {
       "name": "pi-smart-fetch",
-      "version": "0.2.3",
+      "version": "0.2.9",
       "dependencies": {
         "@mariozechner/pi-tui": "^0.66.1",
         "@sinclair/typebox": "^0.34.49",
-        "@thinkscape/wreq-js": "2.2.3",
+        "@thinkscape/wreq-js": "2.2.5",
         "defuddle": "^0.14.0",
         "linkedom": "^0.18.12",
       },
@@ -398,7 +398,7 @@
 
     "@smithy/uuid": ["@smithy/uuid@1.1.2", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-O/IEdcCUKkubz60tFbGA7ceITTAJsty+lBjNoorP4Z6XRqaFb/OjQjZODophEcuq68nKm6/0r+6/lLQ+XVpk8g=="],
 
-    "@thinkscape/wreq-js": ["@thinkscape/wreq-js@2.2.3", "", { "os": [ "linux", "win32", "darwin", ], "cpu": [ "x64", "arm64", ] }, "sha512-7c0QlQXrLFB6pDE/owYURZ9BO+cYuh85peuUQ1ll063lB8Og9uBnsV5Ic1madl6TKeacHoq3d7GopeYBIM5GXg=="],
+    "@thinkscape/wreq-js": ["@thinkscape/wreq-js@2.2.5", "", { "os": [ "linux", "win32", "darwin", ], "cpu": [ "x64", "arm64", ] }, "sha512-LqThHxZCNvVATiBXWfVm6Ksp6wykL5IH1JYSQ8tpmzjyn8irbLFqfTF18HM8iNXnZby8AWeVwtMgPXjrNu5pwA=="],
 
     "@tokenizer/inflate": ["@tokenizer/inflate@0.4.1", "", { "dependencies": { "debug": "^4.4.3", "token-types": "^6.1.1" } }, "sha512-2mAv+8pkG6GIZiF1kNg1jAjh27IDxEPKwdGul3snfztFerfPGI1LjDezZp3i7BElXompqEtPmoPx6c2wgtWsOA=="],
 

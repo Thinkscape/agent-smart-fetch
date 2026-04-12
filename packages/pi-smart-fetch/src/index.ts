@@ -1,9 +1,10 @@
 import {
   type ExtensionAPI,
   getAgentDir,
+  getMarkdownTheme,
   keyText,
 } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import {
   type BatchFetchItemProgress,
@@ -17,6 +18,7 @@ import {
   executeFetchToolCall,
   type FetchResult,
   isError,
+  type OutputFormat,
   resolveFetchToolDefaults,
 } from "smart-fetch-core";
 import { loadPiSmartFetchSettings } from "./settings";
@@ -40,6 +42,7 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 type WebFetchRenderDetails = {
   error?: boolean;
   verbose?: boolean;
+  format?: OutputFormat;
   maxChars?: number;
   fetchResult?: FetchResult;
   started?: boolean;
@@ -214,31 +217,65 @@ function renderBatchProgressText(
   return [summary, ...rows].join("\n");
 }
 
-function buildWebFetchCollapsedText(
+function buildWebFetchMetadataLines(
   details: WebFetchRenderDetails,
   theme: {
     fg(color: string, value: string): string;
   },
-) {
+): string[] {
   const fetchResult = details.fetchResult;
   if (!fetchResult) {
-    return theme.fg("muted", "No fetch result available.");
+    return [];
   }
 
-  const metadataLines: string[] = [];
-  if (fetchResult.title) {
-    metadataLines.push(theme.fg("muted", `> Title: ${fetchResult.title}`));
-  }
-  if (fetchResult.published) {
-    metadataLines.push(
-      theme.fg("muted", `> Published: ${fetchResult.published}`),
-    );
-  }
-  if (fetchResult.author) {
-    metadataLines.push(theme.fg("muted", `> Author: ${fetchResult.author}`));
+  const metadata: Array<[label: string, value: string | number | undefined]> =
+    details.verbose
+      ? [
+          ["URL", fetchResult.finalUrl],
+          ["Title", fetchResult.title],
+          ["Author", fetchResult.author],
+          ["Published", fetchResult.published],
+          ["Site", fetchResult.site],
+          ["Language", fetchResult.language],
+          ["Words", fetchResult.wordCount],
+          ["Browser", `${fetchResult.browser}/${fetchResult.os}`],
+        ]
+      : [
+          ["URL", fetchResult.finalUrl],
+          ["Title", fetchResult.title],
+          ["Author", fetchResult.author],
+          ["Published", fetchResult.published],
+        ];
+
+  return metadata
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([label, value]) => theme.fg("accent", `${label}: ${value}`));
+}
+
+function shouldRenderHighlightedContent(format?: OutputFormat) {
+  return format === "markdown" || format === "json" || format === "html";
+}
+
+function buildHighlightedMarkdownContent(
+  content: string,
+  format: OutputFormat,
+): string {
+  if (format === "json") {
+    return `\`\`\`json\n${content}\n\`\`\``;
   }
 
-  const contentLines = fetchResult.content
+  if (format === "html") {
+    return `\`\`\`html\n${content}\n\`\`\``;
+  }
+
+  return content;
+}
+
+function buildWebFetchCollapsedPreview(details: WebFetchRenderDetails): {
+  previewContent: string;
+  remainingLines: number;
+} {
+  const contentLines = (details.fetchResult?.content ?? "")
     .split("\n")
     .filter(
       (line, index, lines) =>
@@ -246,27 +283,72 @@ function buildWebFetchCollapsedText(
     );
   const maxPreviewLines = 7;
   const previewLines = contentLines.slice(0, maxPreviewLines);
-  const remainingLines = Math.max(0, contentLines.length - previewLines.length);
-  const expandKey = keyText("app.tools.expand") || "Ctrl+O";
 
-  const parts: string[] = [];
+  return {
+    previewContent: previewLines.join("\n"),
+    remainingLines: Math.max(0, contentLines.length - previewLines.length),
+  };
+}
+
+function createWebFetchResultComponent(
+  details: WebFetchRenderDetails,
+  expanded: boolean,
+  theme: {
+    fg(color: string, value: string): string;
+  },
+) {
+  const fetchResult = details.fetchResult;
+  if (!fetchResult) {
+    return new Text(theme.fg("muted", "No fetch result available."), 0, 0);
+  }
+
+  const metadataLines = buildWebFetchMetadataLines(details, theme);
+  const { previewContent, remainingLines } =
+    buildWebFetchCollapsedPreview(details);
+  const content = expanded ? fetchResult.content : previewContent;
+  const format = details.format ?? "markdown";
+  const container = new Container();
+
   if (metadataLines.length > 0) {
-    parts.push(...metadataLines, "");
+    container.addChild(new Text(metadataLines.join("\n"), 0, 0));
   }
 
-  if (previewLines.length > 0) {
-    parts.push(...previewLines.map((line) => theme.fg("toolOutput", line)));
+  if (metadataLines.length > 0 && content) {
+    container.addChild(new Spacer(1));
   }
 
-  if (remainingLines > 0) {
-    parts.push(
-      theme.fg("muted", `... (${remainingLines} more lines, `) +
-        theme.fg("dim", expandKey) +
-        theme.fg("muted", " to expand)"),
+  if (content) {
+    if (shouldRenderHighlightedContent(format)) {
+      container.addChild(
+        new Markdown(
+          buildHighlightedMarkdownContent(content, format),
+          0,
+          0,
+          getMarkdownTheme(),
+        ),
+      );
+    } else {
+      container.addChild(new Text(content, 0, 0));
+    }
+  }
+
+  if (!expanded && remainingLines > 0) {
+    const expandKey = keyText("app.tools.expand") || "Ctrl+O";
+    if (content) {
+      container.addChild(new Spacer(1));
+    }
+    container.addChild(
+      new Text(
+        theme.fg("muted", `... (${remainingLines} more lines, `) +
+          theme.fg("dim", expandKey) +
+          theme.fg("muted", " to expand)"),
+        0,
+        0,
+      ),
     );
   }
 
-  return parts.join("\n");
+  return container;
 }
 
 function renderSingleFetchProgressText(
@@ -395,6 +477,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       let spinnerTimer: ReturnType<typeof setInterval> | null = null;
       let latestDetails: WebFetchRenderDetails = {
         verbose,
+        format: (params.format as OutputFormat | undefined) ?? "markdown",
         started: true,
         status: "connecting",
         progress: 0,
@@ -469,6 +552,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
           ],
           details: {
             verbose,
+            format: latestDetails.format,
             maxChars: runtimeDefaults.maxChars,
             fetchResult: result,
             started: true,
@@ -512,11 +596,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
         return new Text(theme.fg("error", firstLine), 0, 0);
       }
 
-      if (!expanded) {
-        return new Text(buildWebFetchCollapsedText(details, theme), 0, 0);
-      }
-
-      return new Text(outputText, 0, 0);
+      return createWebFetchResultComponent(details, expanded, theme);
     },
   });
 

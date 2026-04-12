@@ -177,6 +177,7 @@ describe("pi extension", () => {
       ],
       details: {
         verbose: false,
+        format: "markdown",
         maxChars: 50000,
         fetchResult: {
           url: "https://example.com/article",
@@ -209,8 +210,9 @@ describe("pi extension", () => {
       .renderResult?.(result, { expanded: false }, testTheme)
       .render(120);
     const collapsedText = collapsedLines?.join("\n") ?? "";
-    expect(collapsedText).toContain("> Title: Example Article");
-    expect(collapsedText).toContain("# Example Article");
+    expect(collapsedText).toContain("Title: Example Article");
+    expect(collapsedText).toContain("URL: https://example.com/article");
+    expect(collapsedText).toContain("Example Article");
     expect(collapsedText).toContain("Line 6");
     expect(collapsedText).not.toContain("Line 8");
     expect(collapsedText).toContain("Ctrl+O to expand");
@@ -220,7 +222,8 @@ describe("pi extension", () => {
       .renderResult?.(result, { expanded: true }, testTheme)
       .render(120);
     const expandedText = expandedLines?.join("\n") ?? "";
-    expect(expandedText).toContain("# Example Article");
+    expect(expandedText).toContain("Title: Example Article");
+    expect(expandedText).toContain("Example Article");
     expect(expandedText).toContain("Line 9");
   });
 

@@ -2,8 +2,10 @@ import { describe, expect, it } from "bun:test";
 import {
   buildBatchFetchResponseText,
   buildCompactMetadataHeader,
+  buildFetchErrorResponseText,
   buildFetchResponseText,
   buildMetadataHeader,
+  buildUserFacingFetchErrorSummary,
   escapeHtml,
   markdownToText,
   parseAndFormatJson,
@@ -83,6 +85,61 @@ describe("truncateContent", () => {
   it("adds a truncation marker when content exceeds max chars", () => {
     const output = truncateContent("abcdefghij", 5);
     expect(output).toBe("abcde\n\n[... truncated]");
+  });
+});
+
+describe("error formatting", () => {
+  it("builds short user-facing summaries", () => {
+    expect(
+      buildUserFacingFetchErrorSummary({
+        error: "whatever",
+        code: "http_error",
+        statusCode: 503,
+        statusText: "Service Unavailable",
+      }),
+    ).toBe("Server responded with 503 Service Unavailable");
+    expect(
+      buildUserFacingFetchErrorSummary({
+        error: "whatever",
+        code: "timeout",
+        phase: "loading",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("Timed out while downloading the file.");
+    expect(
+      buildUserFacingFetchErrorSummary({
+        error: "whatever",
+        code: "invalid_url",
+      }),
+    ).toBe("That URL is invalid.");
+  });
+
+  it("renders timeout errors with retry guidance and known metadata", () => {
+    const output = buildFetchErrorResponseText({
+      error:
+        "Timeout of 15000ms exceeded while downloading a 10.0 MB file from https://example.com/file.dat.",
+      code: "timeout",
+      phase: "loading",
+      timeoutMs: 15000,
+      url: "https://example.com/file.dat",
+      finalUrl: "https://cdn.example.com/file.dat",
+      statusCode: 200,
+      statusText: "OK",
+      mimeType: "application/octet-stream",
+      contentLength: 10 * 1024 * 1024,
+      downloadedBytes: 2 * 1024 * 1024,
+    });
+
+    expect(output).toContain("Error: Timeout of 15000ms exceeded");
+    expect(output).toContain("> Phase: downloading the response body");
+    expect(output).toContain("> Timeout: 15000ms (15s)");
+    expect(output).toContain("> HTTP status: 200 OK");
+    expect(output).toContain("> Content-Length: 10485760 bytes (10.0 MB)");
+    expect(output).toContain(
+      "> Downloaded before failure: 2097152 bytes (2.00 MB)",
+    );
+    expect(output).toContain("> Suggested timeoutMs: 120000");
+    expect(output).toContain("The timeoutMs parameter is configurable.");
   });
 });
 

@@ -8,6 +8,10 @@ import {
   DEFAULT_TIMEOUT_MS,
 } from "./constants";
 import { defuddleFetch, isError } from "./extract";
+import {
+  buildFetchErrorResponseText,
+  buildUserFacingFetchErrorSummary,
+} from "./format";
 import type {
   BatchFetchItemProgress,
   BatchFetchItemResult,
@@ -69,6 +73,11 @@ export function createBaseFetchToolParameterProperties(
     maxChars: Type.Optional(
       Type.Number({
         description: `Maximum characters to return. Default: ${defaults.maxChars}`,
+      }),
+    ),
+    timeoutMs: Type.Optional(
+      Type.Number({
+        description: `Request timeout in milliseconds. Default: ${defaults.timeoutMs}`,
       }),
     ),
     format: Type.Optional(
@@ -139,7 +148,7 @@ function buildFetchOptionsFromParams(
       (params.includeReplies as boolean | "extractors") ??
       defaults.includeReplies,
     proxy: params.proxy as string | undefined,
-    timeoutMs: defaults.timeoutMs,
+    timeoutMs: (params.timeoutMs as number) ?? defaults.timeoutMs,
     tempDir: defaults.tempDir,
   };
 }
@@ -284,14 +293,19 @@ export async function executeBatchFetchToolCall(
         });
 
         if (isError(result)) {
+          const errorText = buildFetchErrorResponseText(result);
           results[index] = {
             index,
             request: normalizedRequest,
             status: "error",
             progress: PROGRESS_BY_STATUS.error,
-            error: result.error,
+            error: errorText,
           };
-          updateProgress(index, "error", result.error);
+          updateProgress(
+            index,
+            "error",
+            buildUserFacingFetchErrorSummary(result),
+          );
           continue;
         }
 

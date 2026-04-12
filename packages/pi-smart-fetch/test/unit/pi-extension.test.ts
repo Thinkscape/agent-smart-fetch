@@ -141,7 +141,14 @@ describe("pi extension", () => {
     );
 
     expect(response.content[0]?.text).toContain("Error: Invalid URL");
-    expect(response.details).toEqual({ error: true, verbose: false });
+    expect(response.details).toMatchObject({
+      error: true,
+      verbose: false,
+      userErrorSummary: "That URL is invalid.",
+    });
+    expect((response.details as Record<string, unknown>).errorText).toEqual(
+      expect.stringContaining("Error: Invalid URL: not-a-url"),
+    );
   });
 
   it("renders web_fetch call header, compact collapsed result, and full output when expanded", () => {
@@ -227,6 +234,43 @@ describe("pi extension", () => {
     expect(expandedText).toContain("Line 9");
   });
 
+  it("renders descriptive fetch errors instead of the generic no-result fallback", () => {
+    const registeredTool = findTool("web_fetch");
+    expect(registeredTool.renderResult).toBeDefined();
+
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: [
+            "Error: Timeout of 15000ms exceeded while downloading a 10.0 MB file from https://example.com/file.dat.",
+            "",
+            "> Phase: downloading the response body",
+            "> Timeout: 15000ms (15s)",
+            "> Suggested timeoutMs: 120000",
+            "",
+            "The timeoutMs parameter is configurable. Retry this call with a higher timeoutMs value.",
+          ].join("\n"),
+        },
+      ],
+      details: {
+        error: true,
+        errorText:
+          "Error: Timeout of 15000ms exceeded while downloading a 10.0 MB file from https://example.com/file.dat.",
+        userErrorSummary: "Timed out while downloading the file.",
+        verbose: false,
+      },
+    };
+
+    const lines = registeredTool
+      .renderResult?.(result, { expanded: false }, testTheme)
+      .render(120);
+    const text = lines?.join("\n") ?? "";
+    expect(text).toContain("Timed out while downloading the file.");
+    expect(text).not.toContain("Suggested timeoutMs: 120000");
+    expect(text).not.toContain("No fetch result available.");
+  });
+
   it("renders compact attachment results without content preview", () => {
     const registeredTool = findTool("web_fetch");
     expect(registeredTool.renderResult).toBeDefined();
@@ -308,7 +352,7 @@ describe("pi extension", () => {
     expect(response.content[0]?.text).toContain("> Requests: 1");
     expect(response.content[0]?.text).toContain("## [1/1] not-a-url");
     expect(response.content[0]?.text).toContain(
-      "> Error: Invalid URL: not-a-url",
+      "Error: Invalid URL: not-a-url",
     );
     expect(response.details?.batchResult).toBeDefined();
     expect(response.details?.batchProgress).toBeDefined();

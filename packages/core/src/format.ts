@@ -2,6 +2,7 @@ import type {
   BatchFetchItemResult,
   BatchFetchResult,
   FetchError,
+  FetchErrorPhase,
   FetchResult,
   OutputFormat,
 } from "./types";
@@ -19,6 +20,199 @@ function buildHeader(
     .filter(([, value]) => value !== undefined && value !== "")
     .map(([label, value]) => `> ${label}: ${value}`)
     .join("\n");
+}
+
+function formatByteCount(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Math.max(0, bytes);
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+function formatDurationMs(durationMs: number): string {
+  if (durationMs < 1000) {
+    return `${durationMs}ms`;
+  }
+
+  const seconds = durationMs / 1000;
+  if (seconds < 60) {
+    return `${durationMs}ms (${seconds.toFixed(seconds >= 10 ? 0 : 1)}s)`;
+  }
+
+  const minutes = seconds / 60;
+  return `${durationMs}ms (${minutes.toFixed(minutes >= 10 ? 0 : 1)}m)`;
+}
+
+function describeErrorPhase(phase: FetchErrorPhase | undefined): string {
+  switch (phase) {
+    case "validation":
+      return "validating the request";
+    case "connecting":
+      return "connecting";
+    case "waiting":
+      return "waiting for the server response";
+    case "loading":
+      return "downloading the response body";
+    case "processing":
+      return "processing the response";
+    default:
+      return "unknown";
+  }
+}
+
+function roundSuggestedTimeoutMs(value: number): number {
+  if (value <= 10_000) return Math.ceil(value / 1_000) * 1_000;
+  if (value <= 60_000) return Math.ceil(value / 5_000) * 5_000;
+  if (value <= 300_000) return Math.ceil(value / 10_000) * 10_000;
+  return Math.ceil(value / 30_000) * 30_000;
+}
+
+function suggestRetryTimeoutMs(error: FetchError): number | undefined {
+  if (!error.timeoutMs || error.timeoutMs <= 0) {
+    return undefined;
+  }
+
+  if (
+    error.phase === "loading" &&
+    error.contentLength &&
+    error.downloadedBytes &&
+    error.downloadedBytes > 0
+  ) {
+    const projectedMs =
+      (error.timeoutMs * error.contentLength) / error.downloadedBytes;
+    return roundSuggestedTimeoutMs(projectedMs * 1.5);
+  }
+
+  if (error.phase === "processing") {
+    return roundSuggestedTimeoutMs(error.timeoutMs * 2);
+  }
+
+  if (error.phase === "connecting" || error.phase === "waiting") {
+    return roundSuggestedTimeoutMs(Math.max(error.timeoutMs * 2, 30_000));
+  }
+
+  return roundSuggestedTimeoutMs(error.timeoutMs * 2);
+}
+
+export function buildUserFacingFetchErrorSummary(error: FetchError): string {
+  if (error.code === "http_error" && error.statusCode) {
+    return `Server responded with ${error.statusCode}${error.statusText ? ` ${error.statusText}` : ""}`;
+  }
+
+  switch (error.code) {
+    case "invalid_url":
+      return "That URL is invalid.";
+    case "unsupported_protocol":
+      return "Only http and https URLs are supported.";
+    case "timeout":
+      switch (error.phase) {
+        case "connecting":
+          return "Timed out while connecting to the server.";
+        case "waiting":
+          return "The server took too long to start responding.";
+        case "loading":
+          return error.mimeType && !error.mimeType.startsWith("text/")
+            ? "Timed out while downloading the file."
+            : "Timed out while downloading the response.";
+        case "processing":
+          return "Timed out while processing the response.";
+        default:
+          return "The request timed out.";
+      }
+    case "unexpected_response":
+      return "The response format was unexpected.";
+    case "download_error":
+      return "The file could not be saved locally.";
+    case "no_content":
+      return "No readable content could be extracted from the page.";
+    case "processing_error":
+      return "The response could not be processed.";
+    case "network_error":
+      return "The request failed before a usable response was returned.";
+    default:
+      return error.error;
+  }
+}
+
+export function buildFetchErrorResponseText(error: FetchError): string {
+  const lines = [`Error: ${error.error}`];
+
+  const metadata = buildHeader([
+    ["URL", error.url],
+    ["Final URL", error.finalUrl],
+    ["Phase", error.phase ? describeErrorPhase(error.phase) : undefined],
+    [
+      "Timeout",
+      error.timeoutMs ? formatDurationMs(error.timeoutMs) : undefined,
+    ],
+    [
+      "HTTP status",
+      error.statusCode
+        ? `${error.statusCode}${error.statusText ? ` ${error.statusText}` : ""}`
+        : undefined,
+    ],
+    ["Mime type", error.mimeType],
+    [
+      "Content-Length",
+      error.contentLength !== undefined
+        ? `${error.contentLength} bytes (${formatByteCount(error.contentLength)})`
+        : undefined,
+    ],
+    [
+      "Downloaded before failure",
+      error.downloadedBytes !== undefined
+        ? `${error.downloadedBytes} bytes (${formatByteCount(error.downloadedBytes)})`
+        : undefined,
+    ],
+    [
+      "Suggested timeoutMs",
+      error.code === "timeout" ? suggestRetryTimeoutMs(error) : undefined,
+    ],
+  ]);
+
+  if (metadata) {
+    lines.push("", metadata);
+  }
+
+  if (error.code === "timeout") {
+    lines.push(
+      "",
+      "The timeoutMs parameter is configurable. Retry this call with a higher timeoutMs value.",
+    );
+  } else if (error.code === "http_error") {
+    if (error.statusCode === 429) {
+      lines.push(
+        "",
+        "The server rate-limited this request. Retrying later or using a different proxy may help.",
+      );
+    } else if (error.statusCode === 401 || error.statusCode === 403) {
+      lines.push(
+        "",
+        "The server rejected this request. Authentication, a different browser profile, or a different proxy may be required.",
+      );
+    } else if ((error.statusCode ?? 0) >= 500) {
+      lines.push(
+        "",
+        "The server failed while processing the request. Retrying later may help.",
+      );
+    }
+  } else if (error.code === "download_error") {
+    lines.push(
+      "",
+      "The download failed before completion. Retrying may help, especially if the connection was interrupted.",
+    );
+  } else if (error.retryable) {
+    lines.push("", "Retrying this request may help.");
+  }
+
+  return lines.join("\n");
 }
 
 export function markdownToText(markdown: string): string {
@@ -111,10 +305,15 @@ function buildBatchItemText(
   const heading = buildBatchItemHeading(item, total);
 
   if (item.status === "error") {
+    const errorText = item.error ?? "Unknown error";
+    if (errorText.includes("\n")) {
+      return `${heading}\n${errorText}`;
+    }
+
     const errorHeader = buildHeader([
       ["URL", item.request.url],
       ["Status", "error"],
-      ["Error", item.error ?? "Unknown error"],
+      ["Error", errorText.replace(/^Error:\s+/, "")],
     ]);
     return `${heading}\n${errorHeader}`;
   }

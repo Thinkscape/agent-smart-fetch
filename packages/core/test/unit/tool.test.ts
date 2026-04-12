@@ -125,7 +125,7 @@ describe("executeBatchFetchToolCall", () => {
     expect(result.items[1]?.status).toBe("done");
     expect(result.items[2]?.status).toBe("error");
     expect(result.items[2]?.error).toBe(
-      "HTTP 500 for https://example.com/fail",
+      "Error: HTTP 500 for https://example.com/fail",
     );
     expect(snapshots[0]?.statuses).toEqual(["queued", "queued", "queued"]);
     expect(

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { Type } from "@sinclair/typebox";
 import {
   buildBatchFetchResponseText,
+  buildFetchErrorResponseText,
   buildFetchResponseText,
   createBaseFetchToolParameterProperties,
   createBatchFetchToolParameterProperties,
@@ -52,18 +53,35 @@ const plugin = {
       parameters: Type.Object(createBaseFetchToolParameterProperties(defaults)),
 
       async execute(_toolCallId: string, params: Record<string, unknown>) {
-        const result = await executeFetchToolCall(params, defaults);
+        try {
+          const result = await executeFetchToolCall(params, defaults);
 
-        if (isError(result)) {
+          if (isError(result)) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: buildFetchErrorResponseText(result),
+                },
+              ],
+              isError: true,
+            };
+          }
+
+          return renderToolResponse(result);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
           return {
             content: [
-              { type: "text" as const, text: `Error: ${result.error}` },
+              {
+                type: "text" as const,
+                text: `Error: Unexpected smart_fetch failure.\n\n${message}`,
+              },
             ],
             isError: true,
           };
         }
-
-        return renderToolResponse(result);
       },
     });
 

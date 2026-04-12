@@ -52,8 +52,38 @@ export interface FileFetchResult extends BaseFetchResult {
 
 export type FetchResult = ContentFetchResult | FileFetchResult;
 
+export type FetchErrorCode =
+  | "invalid_url"
+  | "unsupported_protocol"
+  | "http_error"
+  | "unexpected_response"
+  | "timeout"
+  | "network_error"
+  | "processing_error"
+  | "download_error"
+  | "no_content";
+
+export type FetchErrorPhase =
+  | "validation"
+  | "connecting"
+  | "waiting"
+  | "loading"
+  | "processing"
+  | "unknown";
+
 export interface FetchError {
   error: string;
+  code?: FetchErrorCode;
+  phase?: FetchErrorPhase;
+  retryable?: boolean;
+  timeoutMs?: number;
+  url?: string;
+  finalUrl?: string;
+  statusCode?: number;
+  statusText?: string;
+  mimeType?: string;
+  contentLength?: number;
+  downloadedBytes?: number;
 }
 
 export interface BatchFetchItemProgress {

@@ -4,6 +4,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -210,23 +211,19 @@ async function streamResponseToFile(
   await mkdir(parse(filePath).dir, { recursive: true });
   let fileSize = 0;
 
-  if (response.readable) {
-    const source = response.readable();
-    source.on("data", (chunk: string | ArrayBufferView) => {
-      fileSize +=
-        typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.byteLength;
-    });
-    await pipeline(
-      source,
-      createWriteStream(filePath, { flags: "wx", mode: 0o600 }),
-    );
-    await chmod(filePath, 0o600);
-    return fileSize;
-  }
-
   if (response.body) {
     const output = createWriteStream(filePath, { flags: "wx", mode: 0o600 });
     const reader = response.body.getReader();
+
+    await new Promise<void>((resolve, reject) => {
+      output.once("open", () => resolve());
+      output.once("error", reject);
+    });
+
+    const finished = new Promise<void>((resolve, reject) => {
+      output.once("finish", () => resolve());
+      output.once("error", reject);
+    });
 
     try {
       while (true) {
@@ -237,18 +234,31 @@ async function streamResponseToFile(
 
         if (value) {
           fileSize += value.byteLength;
-          output.write(Buffer.from(value));
+          if (!output.write(Buffer.from(value))) {
+            await once(output, "drain");
+          }
         }
       }
-    } finally {
       output.end();
+      await finished;
+    } finally {
       reader.releaseLock();
     }
 
-    await new Promise<void>((resolve, reject) => {
-      output.on("finish", () => resolve());
-      output.on("error", reject);
+    await chmod(filePath, 0o600);
+    return fileSize;
+  }
+
+  if (response.readable) {
+    const source = response.readable();
+    source.on("data", (chunk: string | ArrayBufferView) => {
+      fileSize +=
+        typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.byteLength;
     });
+    await pipeline(
+      source,
+      createWriteStream(filePath, { flags: "wx", mode: 0o600 }),
+    );
     await chmod(filePath, 0o600);
     return fileSize;
   }
@@ -509,6 +519,21 @@ type WreqLikeRequestEvent = {
   type?: string;
   contentLength?: number | null;
   downloadedBytes?: number;
+  status?: number;
+  url?: string;
+  message?: string;
+};
+
+type FetchErrorContext = {
+  url: string;
+  finalUrl?: string;
+  phase: "connecting" | "waiting" | "loading" | "processing" | "unknown";
+  timeoutMs: number;
+  statusCode?: number;
+  statusText?: string;
+  mimeType?: string;
+  contentLength?: number;
+  downloadedBytes?: number;
 };
 
 function emitProgress(
@@ -523,6 +548,155 @@ function emitStatus(
   status: Exclude<FetchProgressUpdate["status"], never>,
 ): void {
   hooks.onStatusChange?.(status);
+}
+
+function formatByteCount(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = Math.max(0, bytes);
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const decimals = unitIndex === 0 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+}
+
+function parseContentLengthHeader(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function isTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /timed out|timeout|deadline exceeded|abort(?:ed)?/i.test(message);
+}
+
+function buildTimeoutError(context: FetchErrorContext): FetchError {
+  const targetUrl = context.finalUrl ?? context.url;
+  const timeoutLabel = `${context.timeoutMs}ms`;
+
+  if (context.phase === "connecting") {
+    return {
+      error: `Timeout of ${timeoutLabel} exceeded while connecting to ${targetUrl}.`,
+      code: "timeout",
+      phase: "connecting",
+      retryable: true,
+      timeoutMs: context.timeoutMs,
+      url: context.url,
+      finalUrl: context.finalUrl,
+    };
+  }
+
+  if (context.phase === "waiting") {
+    return {
+      error: `Timeout of ${timeoutLabel} exceeded while waiting for ${targetUrl} to start responding.`,
+      code: "timeout",
+      phase: "waiting",
+      retryable: true,
+      timeoutMs: context.timeoutMs,
+      url: context.url,
+      finalUrl: context.finalUrl,
+    };
+  }
+
+  if (context.phase === "loading") {
+    const sizeHint = context.contentLength
+      ? ` a ${formatByteCount(context.contentLength)} ${context.mimeType && !isTextualContentType(context.mimeType) ? "file" : "response"}`
+      : " the response body";
+    return {
+      error: `Timeout of ${timeoutLabel} exceeded while downloading${sizeHint} from ${targetUrl}.`,
+      code: "timeout",
+      phase: "loading",
+      retryable: true,
+      timeoutMs: context.timeoutMs,
+      url: context.url,
+      finalUrl: context.finalUrl,
+      statusCode: context.statusCode,
+      statusText: context.statusText,
+      mimeType: context.mimeType,
+      contentLength: context.contentLength,
+      downloadedBytes: context.downloadedBytes,
+    };
+  }
+
+  if (context.phase === "processing") {
+    return {
+      error: `Timeout of ${timeoutLabel} exceeded while processing the response from ${targetUrl}.`,
+      code: "timeout",
+      phase: "processing",
+      retryable: true,
+      timeoutMs: context.timeoutMs,
+      url: context.url,
+      finalUrl: context.finalUrl,
+      statusCode: context.statusCode,
+      statusText: context.statusText,
+      mimeType: context.mimeType,
+      contentLength: context.contentLength,
+      downloadedBytes: context.downloadedBytes,
+    };
+  }
+
+  return {
+    error: `Timeout of ${timeoutLabel} exceeded while fetching ${targetUrl}.`,
+    code: "timeout",
+    phase: context.phase,
+    retryable: true,
+    timeoutMs: context.timeoutMs,
+    url: context.url,
+    finalUrl: context.finalUrl,
+    statusCode: context.statusCode,
+    statusText: context.statusText,
+    mimeType: context.mimeType,
+    contentLength: context.contentLength,
+    downloadedBytes: context.downloadedBytes,
+  };
+}
+
+function buildThrownFetchError(
+  error: unknown,
+  context: FetchErrorContext,
+): FetchError {
+  if (isTimeoutError(error)) {
+    return buildTimeoutError(context);
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const targetUrl = context.finalUrl ?? context.url;
+  const phaseDescription =
+    context.phase === "loading"
+      ? "downloading the response"
+      : context.phase === "waiting"
+        ? "waiting for the server response"
+        : context.phase === "connecting"
+          ? "connecting"
+          : "fetching";
+
+  return {
+    error:
+      context.phase === "processing"
+        ? `Failed while processing the response from ${targetUrl}: ${message}`
+        : `Request failed while ${phaseDescription} for ${targetUrl}: ${message}`,
+    code:
+      context.phase === "processing"
+        ? "processing_error"
+        : context.phase === "loading" && context.mimeType
+          ? "download_error"
+          : "network_error",
+    phase: context.phase,
+    retryable: context.phase !== "processing",
+    timeoutMs: context.timeoutMs,
+    url: context.url,
+    finalUrl: context.finalUrl,
+    statusCode: context.statusCode,
+    statusText: context.statusText,
+    mimeType: context.mimeType,
+    contentLength: context.contentLength,
+    downloadedBytes: context.downloadedBytes,
+  };
 }
 
 function mapRequestEventToProgress(
@@ -679,7 +853,16 @@ async function buildFileResult(
     }
   }
 
-  return { error: `Unable to create a unique temp file for ${finalUrl}` };
+  return {
+    error: `Unable to create a unique temp file for ${finalUrl}`,
+    code: "download_error",
+    phase: "loading",
+    retryable: true,
+    timeoutMs: opts.timeoutMs,
+    url: opts.url,
+    finalUrl,
+    mimeType: normalizeContentType(contentType) || undefined,
+  };
 }
 
 function shouldStripReplies(site: string): boolean {
@@ -713,12 +896,22 @@ export function createDefuddleFetch(
     try {
       parsed = new URL(opts.url);
     } catch {
-      return { error: `Invalid URL: ${opts.url}` };
+      return {
+        error: `Invalid URL: ${opts.url}`,
+        code: "invalid_url",
+        phase: "validation",
+        retryable: false,
+        url: opts.url,
+      };
     }
 
     if (!["http:", "https:"].includes(parsed.protocol)) {
       return {
         error: `Only http/https URLs supported, got ${parsed.protocol}`,
+        code: "unsupported_protocol",
+        phase: "validation",
+        retryable: false,
+        url: opts.url,
       };
     }
 
@@ -738,198 +931,292 @@ export function createDefuddleFetch(
       fetchOptions.proxy = opts.proxy;
     }
 
-    emitProgress(hooks, {
-      status: "connecting",
-      progress: 0,
-      phase: "fetch_start",
-    });
-    fetchOptions.onRequestEvent = (event: WreqLikeRequestEvent) => {
-      const mapped = mapRequestEventToProgress(event);
-      if (mapped) {
-        emitProgress(hooks, mapped);
-      }
+    const errorContext: FetchErrorContext = {
+      url: opts.url,
+      phase: "connecting",
+      timeoutMs,
     };
-    fetchOptions.captureDiagnostics = true;
-    const response = await dependencies.fetch(opts.url, fetchOptions);
 
-    if (!response.ok) {
-      return {
-        error: `HTTP ${response.status} ${response.statusText} for ${opts.url}`,
-      };
-    }
-
-    const finalUrl = response.url ?? opts.url;
-    const contentType = response.headers.get("content-type") ?? "";
-    const contentDisposition =
-      response.headers.get("content-disposition") ?? "";
-    const shouldDownloadToFile =
-      isAttachmentDisposition(contentDisposition) ||
-      !isTextualContentType(contentType);
-
-    if (shouldDownloadToFile) {
-      const fileResult = await buildFileResult(
-        opts,
-        response,
-        finalUrl,
-        contentType,
-        contentDisposition,
-        browser,
-        os,
-      );
-      if (!isError(fileResult)) {
-        emitStatus(hooks, "done");
-        emitProgress(hooks, {
-          status: "done",
-          progress: 1,
-          phase: "file_done",
-        });
-      }
-      return fileResult;
-    }
-
-    const rawBody = await response.text();
-    const jsonResponse = isJsonResponse(contentType, rawBody);
-
-    if (format === "json") {
-      if (!jsonResponse) {
-        return { error: `Not a JSON response (content-type: ${contentType})` };
-      }
-
-      const result = buildJsonResult(
-        opts,
-        finalUrl,
-        rawBody,
-        format,
-        maxChars,
-        browser,
-        os,
-      );
-      if (!isError(result)) {
-        emitStatus(hooks, "done");
-        emitProgress(hooks, {
-          status: "done",
-          progress: 1,
-          phase: "json_done",
-        });
-      }
-      return result;
-    }
-
-    if (jsonResponse) {
-      const result = buildJsonResult(
-        opts,
-        finalUrl,
-        rawBody,
-        format,
-        maxChars,
-        browser,
-        os,
-      );
-      if (!isError(result)) {
-        emitStatus(hooks, "done");
-        emitProgress(hooks, {
-          status: "done",
-          progress: 1,
-          phase: "json_done",
-        });
-      }
-      return result;
-    }
-
-    if (isPlainTextContentType(contentType)) {
-      const result = buildPlainTextResult(
-        opts,
-        finalUrl,
-        rawBody,
-        format,
-        maxChars,
-        browser,
-        os,
-      );
-      emitStatus(hooks, "done");
+    try {
       emitProgress(hooks, {
-        status: "done",
-        progress: 1,
-        phase: "plain_text_done",
+        status: "connecting",
+        progress: 0,
+        phase: "fetch_start",
       });
-      return result;
-    }
+      fetchOptions.onRequestEvent = (event: WreqLikeRequestEvent) => {
+        if (event.url) {
+          errorContext.finalUrl = event.url;
+        }
+        if (event.status) {
+          errorContext.statusCode = event.status;
+        }
+        if (event.contentLength !== undefined && event.contentLength !== null) {
+          errorContext.contentLength = event.contentLength;
+        }
+        if (event.downloadedBytes !== undefined) {
+          errorContext.downloadedBytes = event.downloadedBytes;
+        }
+        if (event.type === "request_start") {
+          errorContext.phase = "connecting";
+        } else if (event.type === "request_sent") {
+          errorContext.phase = "waiting";
+        } else if (
+          event.type === "response_headers" ||
+          event.type === "body_progress" ||
+          event.type === "body_complete"
+        ) {
+          errorContext.phase = "loading";
+        }
 
-    if (!HTML_CONTENT_TYPES.some((value) => contentType.includes(value))) {
-      return { error: `Not an HTML page (content-type: ${contentType})` };
-    }
+        const mapped = mapRequestEventToProgress(event);
+        if (mapped) {
+          emitProgress(hooks, mapped);
+        }
+      };
+      fetchOptions.captureDiagnostics = true;
+      const response = await dependencies.fetch(opts.url, fetchOptions);
 
-    emitStatus(hooks, "processing");
-    emitProgress(hooks, {
-      status: "processing",
-      progress: 0.96,
-      phase: "extracting",
-    });
-    const fallbackDocument = parseLinkedomHTML(rawBody, finalUrl);
-    const extractionDocument = parseLinkedomHTML(rawBody, finalUrl);
-    const extracted = await dependencies.defuddle(
-      extractionDocument,
-      finalUrl,
-      {
-        markdown: format !== "html",
-        removeImages,
-        includeReplies,
-      },
-    );
+      errorContext.finalUrl = response.url ?? opts.url;
+      errorContext.statusCode = response.status;
+      errorContext.statusText = response.statusText;
+      errorContext.mimeType =
+        normalizeContentType(response.headers.get("content-type") ?? "") ||
+        undefined;
+      errorContext.contentLength =
+        errorContext.contentLength ??
+        parseContentLengthHeader(response.headers.get("content-length"));
 
-    let extractedContent = extracted.content;
-    let wordCount = extracted.wordCount;
-
-    if (!extractedContent || wordCount === 0) {
-      const fallbackText = extractDomTextFallback(fallbackDocument);
-      if (!fallbackText) {
+      if (!response.ok) {
         return {
-          error: `No content extracted from ${opts.url}. May need JS rendering or is blocked.`,
+          error: `Server returned HTTP ${response.status} ${response.statusText} for ${opts.url}.`,
+          code: "http_error",
+          phase: errorContext.phase,
+          retryable: response.status >= 500 || response.status === 429,
+          url: opts.url,
+          finalUrl: errorContext.finalUrl,
+          statusCode: response.status,
+          statusText: response.statusText,
+          timeoutMs,
+          mimeType: errorContext.mimeType,
+          contentLength: errorContext.contentLength,
         };
       }
 
-      extractedContent =
-        format === "html"
-          ? rawBody
-          : format === "markdown"
-            ? extractDomMarkdownFallback(fallbackDocument) || fallbackText
-            : fallbackText;
-      wordCount = estimateWordCount(fallbackText);
-    }
+      const finalUrl = response.url ?? opts.url;
+      const contentType = response.headers.get("content-type") ?? "";
+      const contentDisposition =
+        response.headers.get("content-disposition") ?? "";
+      const shouldDownloadToFile =
+        isAttachmentDisposition(contentDisposition) ||
+        !isTextualContentType(contentType);
 
-    if (includeReplies === false && shouldStripReplies(extracted.site ?? "")) {
-      const strippedContent = stripExtractorComments(extractedContent, format);
-      if (strippedContent !== extractedContent) {
-        extractedContent = strippedContent;
-        wordCount = estimateWordCount(
-          format === "text"
-            ? markdownToText(extractedContent)
-            : extractedContent,
+      if (shouldDownloadToFile) {
+        errorContext.phase = "loading";
+        const fileResult = await buildFileResult(
+          opts,
+          response,
+          finalUrl,
+          contentType,
+          contentDisposition,
+          browser,
+          os,
         );
+        if (!isError(fileResult)) {
+          emitStatus(hooks, "done");
+          emitProgress(hooks, {
+            status: "done",
+            progress: 1,
+            phase: "file_done",
+          });
+        }
+        return fileResult;
       }
+
+      errorContext.phase = "loading";
+      const rawBody = await response.text();
+      const jsonResponse = isJsonResponse(contentType, rawBody);
+
+      if (format === "json") {
+        if (!jsonResponse) {
+          return {
+            error: `Not a JSON response (content-type: ${contentType})`,
+            code: "unexpected_response",
+            phase: errorContext.phase,
+            retryable: false,
+            timeoutMs,
+            url: opts.url,
+            finalUrl,
+            mimeType: normalizeContentType(contentType) || undefined,
+            contentLength: errorContext.contentLength,
+          };
+        }
+
+        const result = buildJsonResult(
+          opts,
+          finalUrl,
+          rawBody,
+          format,
+          maxChars,
+          browser,
+          os,
+        );
+        if (!isError(result)) {
+          emitStatus(hooks, "done");
+          emitProgress(hooks, {
+            status: "done",
+            progress: 1,
+            phase: "json_done",
+          });
+        }
+        return result;
+      }
+
+      if (jsonResponse) {
+        const result = buildJsonResult(
+          opts,
+          finalUrl,
+          rawBody,
+          format,
+          maxChars,
+          browser,
+          os,
+        );
+        if (!isError(result)) {
+          emitStatus(hooks, "done");
+          emitProgress(hooks, {
+            status: "done",
+            progress: 1,
+            phase: "json_done",
+          });
+        }
+        return result;
+      }
+
+      if (isPlainTextContentType(contentType)) {
+        const result = buildPlainTextResult(
+          opts,
+          finalUrl,
+          rawBody,
+          format,
+          maxChars,
+          browser,
+          os,
+        );
+        emitStatus(hooks, "done");
+        emitProgress(hooks, {
+          status: "done",
+          progress: 1,
+          phase: "plain_text_done",
+        });
+        return result;
+      }
+
+      if (!HTML_CONTENT_TYPES.some((value) => contentType.includes(value))) {
+        return {
+          error: `Not an HTML page (content-type: ${contentType})`,
+          code: "unexpected_response",
+          phase: errorContext.phase,
+          retryable: false,
+          timeoutMs,
+          url: opts.url,
+          finalUrl,
+          mimeType: normalizeContentType(contentType) || undefined,
+          contentLength: errorContext.contentLength,
+        };
+      }
+
+      errorContext.phase = "processing";
+      emitStatus(hooks, "processing");
+      emitProgress(hooks, {
+        status: "processing",
+        progress: 0.96,
+        phase: "extracting",
+      });
+      const fallbackDocument = parseLinkedomHTML(rawBody, finalUrl);
+      const extractionDocument = parseLinkedomHTML(rawBody, finalUrl);
+      const extracted = await dependencies.defuddle(
+        extractionDocument,
+        finalUrl,
+        {
+          markdown: format !== "html",
+          removeImages,
+          includeReplies,
+        },
+      );
+
+      let extractedContent = extracted.content;
+      let wordCount = extracted.wordCount;
+
+      if (!extractedContent || wordCount === 0) {
+        const fallbackText = extractDomTextFallback(fallbackDocument);
+        if (!fallbackText) {
+          return {
+            error: `No content extracted from ${opts.url}. May need JS rendering or is blocked.`,
+            code: "no_content",
+            phase: "processing",
+            retryable: false,
+            timeoutMs,
+            url: opts.url,
+            finalUrl,
+            mimeType: normalizeContentType(contentType) || undefined,
+            contentLength: errorContext.contentLength,
+          };
+        }
+
+        extractedContent =
+          format === "html"
+            ? rawBody
+            : format === "markdown"
+              ? extractDomMarkdownFallback(fallbackDocument) || fallbackText
+              : fallbackText;
+        wordCount = estimateWordCount(fallbackText);
+      }
+
+      if (
+        includeReplies === false &&
+        shouldStripReplies(extracted.site ?? "")
+      ) {
+        const strippedContent = stripExtractorComments(
+          extractedContent,
+          format,
+        );
+        if (strippedContent !== extractedContent) {
+          extractedContent = strippedContent;
+          wordCount = estimateWordCount(
+            format === "text"
+              ? markdownToText(extractedContent)
+              : extractedContent,
+          );
+        }
+      }
+
+      const normalizedContent =
+        format === "text" ? markdownToText(extractedContent) : extractedContent;
+
+      const result: FetchResult = {
+        kind: "content",
+        url: opts.url,
+        finalUrl,
+        title: extracted.title ?? "",
+        author: extracted.author ?? "",
+        published: extracted.published ?? "",
+        site: extracted.site ?? "",
+        language: extracted.language ?? "",
+        wordCount,
+        content: truncateContent(normalizedContent, maxChars),
+        browser,
+        os,
+      };
+
+      emitStatus(hooks, "done");
+      emitProgress(hooks, { status: "done", progress: 1, phase: "done" });
+      return result;
+    } catch (error) {
+      const fetchError = buildThrownFetchError(error, errorContext);
+      emitStatus(hooks, "error");
+      emitProgress(hooks, { status: "error", progress: 1, phase: "error" });
+      return fetchError;
     }
-
-    const normalizedContent =
-      format === "text" ? markdownToText(extractedContent) : extractedContent;
-
-    const result: FetchResult = {
-      kind: "content",
-      url: opts.url,
-      finalUrl,
-      title: extracted.title ?? "",
-      author: extracted.author ?? "",
-      published: extracted.published ?? "",
-      site: extracted.site ?? "",
-      language: extracted.language ?? "",
-      wordCount,
-      content: truncateContent(normalizedContent, maxChars),
-      browser,
-      os,
-    };
-
-    emitStatus(hooks, "done");
-    emitProgress(hooks, { status: "done", progress: 1, phase: "done" });
-    return result;
   };
 }
 

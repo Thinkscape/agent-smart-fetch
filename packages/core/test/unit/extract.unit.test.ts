@@ -20,10 +20,7 @@ function createResponse({
   body = "<html><body><article><h1>Hello</h1><p>World</p></article></body></html>",
   binaryBody,
   ...overrides
-}: Omit<
-  Partial<FetchResponseLike>,
-  "body" | "text" | "arrayBuffer" | "readable"
-> & {
+}: Omit<Partial<FetchResponseLike>, "body" | "text" | "arrayBuffer"> & {
   contentType?: string;
   contentDisposition?: string | null;
   body?: string;
@@ -276,6 +273,95 @@ describe("createDefuddleFetch", () => {
     }
   });
 
+  it("returns a descriptive timeout error when the server does not start responding in time", async () => {
+    const dependencies = createDependencies({
+      fetch: mock(async (_url: string, options: Record<string, unknown>) => {
+        const onRequestEvent = options.onRequestEvent as
+          | ((event: Record<string, unknown>) => void)
+          | undefined;
+        onRequestEvent?.({ type: "request_start" });
+        onRequestEvent?.({ type: "request_sent" });
+        throw new Error("operation timed out");
+      }),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/slow",
+      timeoutMs: 15_000,
+    });
+
+    expect(isError(result)).toBe(true);
+    if (isError(result)) {
+      expect(result).toMatchObject({
+        code: "timeout",
+        phase: "waiting",
+        timeoutMs: 15_000,
+        retryable: true,
+        url: "https://example.com/slow",
+      });
+      expect(result.error).toContain("start responding");
+    }
+  });
+
+  it("returns timeout metadata when a binary download times out mid-stream", async () => {
+    const tempDir = join(tmpdir(), `smart-fetch-timeout-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const dependencies = createDependencies({
+      fetch: mock(async (_url: string, options: Record<string, unknown>) => {
+        const onRequestEvent = options.onRequestEvent as
+          | ((event: Record<string, unknown>) => void)
+          | undefined;
+        onRequestEvent?.({ type: "request_start" });
+        onRequestEvent?.({ type: "request_sent" });
+        onRequestEvent?.({
+          type: "response_headers",
+          status: 200,
+          url: "https://example.com/file.dat",
+          contentLength: 10 * 1024 * 1024,
+        });
+        onRequestEvent?.({
+          type: "body_progress",
+          downloadedBytes: 1024,
+          contentLength: 10 * 1024 * 1024,
+        });
+
+        return createResponse({
+          url: "https://example.com/file.dat",
+          contentType: "application/octet-stream",
+          readable: () =>
+            new Readable({
+              read() {
+                this.push(Buffer.alloc(1024));
+                this.destroy(new Error("operation timed out"));
+              },
+            }),
+        });
+      }),
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/file.dat",
+      timeoutMs: 15_000,
+      tempDir,
+    });
+
+    expect(isError(result)).toBe(true);
+    if (isError(result)) {
+      expect(result).toMatchObject({
+        code: "timeout",
+        phase: "loading",
+        timeoutMs: 15_000,
+        statusCode: 200,
+        mimeType: "application/octet-stream",
+        contentLength: 10 * 1024 * 1024,
+        downloadedBytes: 1024,
+      });
+      expect(result.error).toContain("while downloading");
+    }
+  });
+
   it("returns an error when format=json does not receive JSON", async () => {
     const dependencies = createDependencies();
     const defuddleFetch = createDefuddleFetch(dependencies);
@@ -285,8 +371,11 @@ describe("createDefuddleFetch", () => {
       format: "json",
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       error: "Not a JSON response (content-type: text/html; charset=utf-8)",
+      code: "unexpected_response",
+      phase: "loading",
+      retryable: false,
     });
     expect(dependencies.defuddle).not.toHaveBeenCalled();
   });
@@ -426,9 +515,12 @@ describe("createDefuddleFetch", () => {
 
     const result = await defuddleFetch({ url: "https://example.com/empty" });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       error:
         "No content extracted from https://example.com/empty. May need JS rendering or is blocked.",
+      code: "no_content",
+      phase: "processing",
+      retryable: false,
     });
   });
 

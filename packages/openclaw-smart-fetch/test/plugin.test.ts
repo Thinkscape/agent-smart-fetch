@@ -99,7 +99,7 @@ describe("plugin registration", () => {
     expect(response?.content[0]?.text).toContain("> Requests: 1");
     expect(response?.content[0]?.text).toContain("## [1/1] not-a-url");
     expect(response?.content[0]?.text).toContain(
-      "> Error: Invalid URL: not-a-url",
+      "Error: Invalid URL: not-a-url",
     );
   });
 });

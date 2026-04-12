@@ -11,7 +11,9 @@ import {
   type BatchFetchProgressSnapshot,
   type BatchFetchResult,
   buildBatchFetchResponseText,
+  buildFetchErrorResponseText,
   buildFetchResponseText,
+  buildUserFacingFetchErrorSummary,
   createBaseFetchToolParameterProperties,
   createBatchFetchToolParameterProperties,
   executeBatchFetchToolCall,
@@ -42,6 +44,8 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 
 type WebFetchRenderDetails = {
   error?: boolean;
+  errorText?: string;
+  userErrorSummary?: string;
   verbose?: boolean;
   format?: OutputFormat;
   maxChars?: number;
@@ -468,7 +472,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
     label: "web_fetch",
     description: toolDescription,
     promptSnippet:
-      "web_fetch(url, browser?, os?, headers?, maxChars?, format?, removeImages?, includeReplies?, proxy?, verbose?): fetch browser-fingerprinted readable web content",
+      "web_fetch(url, browser?, os?, headers?, maxChars?, timeoutMs?, format?, removeImages?, includeReplies?, proxy?, verbose?): fetch browser-fingerprinted readable web content",
     parameters: Type.Object({
       ...createBaseFetchToolParameterProperties(defaults),
       verbose: Type.Optional(
@@ -558,9 +562,19 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
         });
 
         if (isError(result)) {
+          const errorText = buildFetchErrorResponseText(result);
           return {
-            content: [{ type: "text", text: `Error: ${result.error}` }],
-            details: { error: true, verbose },
+            content: [{ type: "text", text: errorText }],
+            details: {
+              error: true,
+              errorText,
+              userErrorSummary: buildUserFacingFetchErrorSummary(result),
+              verbose,
+              status: latestDetails.status,
+              phase: latestDetails.phase,
+              url: latestDetails.url,
+              spinnerTick,
+            } satisfies WebFetchRenderDetails,
           };
         }
 
@@ -578,6 +592,23 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
             progress: 1,
             phase: "done",
             url: result.finalUrl || result.url,
+            spinnerTick,
+          } satisfies WebFetchRenderDetails,
+        };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const errorText = `Error: Unexpected web_fetch failure for ${typeof params.url === "string" ? params.url : "URL"}.\n\n${message}`;
+        return {
+          content: [{ type: "text", text: errorText }],
+          details: {
+            error: true,
+            errorText,
+            userErrorSummary:
+              "The request failed before a usable response was returned.",
+            verbose,
+            status: latestDetails.status,
+            phase: latestDetails.phase,
+            url: latestDetails.url,
             spinnerTick,
           } satisfies WebFetchRenderDetails,
         };
@@ -610,8 +641,17 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       const outputText = textContent?.type === "text" ? textContent.text : "";
 
       if (details.error) {
-        const firstLine = outputText.split("\n")[0] ?? "Error";
-        return new Text(theme.fg("error", firstLine), 0, 0);
+        return new Text(
+          theme.fg(
+            "error",
+            details.userErrorSummary ||
+              outputText ||
+              details.errorText ||
+              "Error",
+          ),
+          0,
+          0,
+        );
       }
 
       return createWebFetchResultComponent(details, expanded, theme);

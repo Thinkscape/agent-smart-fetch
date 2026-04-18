@@ -1,0 +1,7 @@
+name: smart-fetch
+version: "2.0.0"
+description: Real browser TLS/JA3/HTTP2 fingerprinting via curl-impersonate with Defuddle article extraction. Provides web_fetch and batch_web_fetch tools.
+provides_tools:
+  - web_fetch
+  - batch_web_fetch
+provides_hooks: []

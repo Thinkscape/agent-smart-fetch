@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hermes-smart-fetch"
+version = "2.0.0"
+description = "Hermes Agent plugin — real browser TLS fingerprinting (curl-impersonate) with Defuddle article extraction"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "thinkscape" }]
+dependencies = [
+    "curl_cffi>=0.15.0,<1",
+    "defuddle>=0.1.0",
+]
+
+[project.entry-points."hermes_agent.plugins"]
+smart-fetch = "hermes_smart_fetch"
+
+[tool.setuptools.packages.find]
+include = ["hermes_smart_fetch*"]
+
+[tool.setuptools.package-data]
+hermes_smart_fetch = ["skills/**/SKILL.md"]

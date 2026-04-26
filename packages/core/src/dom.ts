@@ -26,6 +26,13 @@ export function parseLinkedomHTML(html: string, url?: string): Document {
 
   if (url) {
     (doc as { URL?: string }).URL = url;
+    // Defuddle's MetadataExtractor reads doc.location?.href first.
+    // linkedom leaves document.location undefined, so without this
+    // polyfill Defuddle falls back to meta-tag URLs which may be
+    // relative — causing "Invalid URL" from new URL(relativeString).
+    if (!(doc as { location?: unknown }).location) {
+      (doc as { location?: unknown }).location = { href: url } as unknown as Location;
+    }
   }
 
   return document;

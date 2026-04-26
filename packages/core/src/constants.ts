@@ -13,3 +13,9 @@ export const DEFAULT_RAW_ACCEPT_HEADER =
 export const DEFAULT_JSON_ACCEPT_HEADER =
   "application/json,text/json,application/ld+json;q=0.9,text/plain;q=0.8,*/*;q=0.7";
 export const DEFAULT_ACCEPT_LANGUAGE_HEADER = "en-US,en;q=0.9";
+
+/** Hard ceiling for maxChars to prevent memory exhaustion. */
+export const MAX_CHARS_CEILING = 10_000_000;
+
+/** Maximum file download size in bytes (100 MB). */
+export const MAX_DOWNLOAD_BYTES = 100 * 1024 * 1024;

@@ -22,7 +22,14 @@ import {
   DEFAULT_OS,
   DEFAULT_RAW_ACCEPT_HEADER,
   DEFAULT_TIMEOUT_MS,
+  MAX_CHARS_CEILING,
+  MAX_DOWNLOAD_BYTES,
 } from "./constants";
+import {
+  filterUnsafeHeaders,
+  sanitizeUrlForLogging,
+  validateUrlSafety,
+} from "./url-safety";
 import { runtimeDependencies } from "./dependencies";
 import { parseLinkedomHTML } from "./dom";
 import {
@@ -259,6 +266,15 @@ async function streamResponseToFile(
 
         if (value) {
           fileSize += value.byteLength;
+          if (fileSize > MAX_DOWNLOAD_BYTES) {
+            output.destroy();
+            await reader.cancel("download size limit exceeded");
+            reader.releaseLock();
+            await cleanupPartialFile(filePath);
+            throw new Error(
+              `Download exceeded maximum size of ${MAX_DOWNLOAD_BYTES} bytes`,
+            );
+          }
           if (!output.write(Buffer.from(value))) {
             await once(output, "drain");
           }
@@ -296,9 +312,14 @@ async function streamResponseToFile(
 
   if (response.readable) {
     const source = response.readable();
+    let aborted = false;
     source.on("data", (chunk: string | ArrayBufferView) => {
       fileSize +=
         typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.byteLength;
+      if (!aborted && fileSize > MAX_DOWNLOAD_BYTES) {
+        aborted = true;
+        source.destroy(new Error(`Download exceeded maximum size of ${MAX_DOWNLOAD_BYTES} bytes`));
+      }
     });
     try {
       await pipeline(
@@ -325,6 +346,11 @@ async function streamResponseToFile(
     ? new Uint8Array(await response.arrayBuffer())
     : new TextEncoder().encode(await response.text());
   fileSize = body.byteLength;
+  if (fileSize > MAX_DOWNLOAD_BYTES) {
+    throw new Error(
+      `Download exceeded maximum size of ${MAX_DOWNLOAD_BYTES} bytes`,
+    );
+  }
   try {
     await writeFile(filePath, body, { mode: 0o600, flag: "wx" });
     await chmod(filePath, 0o600);
@@ -823,7 +849,12 @@ function buildThrownFetchError(
     ? "connecting"
     : context.phase;
 
-  const message = error instanceof Error ? error.message : String(error);
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  // Strip potential credentials from error messages (proxy URLs, etc.)
+  const message = rawMessage.replace(
+    /:\/\/[^@\s]+@/g,
+    "://***@",
+  );
   const targetUrl = context.finalUrl ?? context.url;
   const phaseDescription =
     effectivePhase === "loading"
@@ -1140,7 +1171,8 @@ export function createDefuddleFetch(
     const browser = opts.browser ?? DEFAULT_BROWSER;
     const os = opts.os ?? DEFAULT_OS;
     const format: OutputFormat = opts.format ?? "markdown";
-    const maxChars = opts.maxChars ?? DEFAULT_MAX_CHARS;
+    const rawMaxChars = opts.maxChars ?? DEFAULT_MAX_CHARS;
+    const maxChars = Math.min(Math.max(1, rawMaxChars), MAX_CHARS_CEILING);
     const removeImages = opts.removeImages ?? false;
     const includeReplies = opts.includeReplies ?? DEFAULT_INCLUDE_REPLIES;
     const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -1168,13 +1200,22 @@ export function createDefuddleFetch(
       };
     }
 
+    // SSRF protection: block private/internal destinations
+    const ssrfError = validateUrlSafety(opts.url, { phase: "validation" });
+    if (ssrfError) {
+      return ssrfError;
+    }
+
+    // Filter out dangerous headers before merging
+    const safeHeaders = filterUnsafeHeaders(opts.headers);
+
     const fetchOptions: Record<string, unknown> = {
       browser,
       os,
       headers: {
         Accept: resolveAcceptHeader(format),
         "Accept-Language": DEFAULT_ACCEPT_LANGUAGE_HEADER,
-        ...opts.headers,
+        ...safeHeaders,
       },
       redirect: "follow",
       timeout: timeoutMs,
@@ -1238,6 +1279,35 @@ export function createDefuddleFetch(
       errorContext.contentLength =
         errorContext.contentLength ??
         parseContentLengthHeader(response.headers.get("content-length"));
+
+      // SSRF protection: re-validate after redirect resolution
+      const finalUrlForSsrf = response.url ?? opts.url;
+      if (finalUrlForSsrf !== opts.url) {
+        const redirectSsrfError = validateUrlSafety(finalUrlForSsrf, {
+          phase: "loading",
+          label: "Redirect target",
+        });
+        if (redirectSsrfError) {
+          return redirectSsrfError;
+        }
+      }
+
+      // Download size guard: reject responses with known Content-Length above limit
+      if (
+        errorContext.contentLength !== undefined &&
+        errorContext.contentLength > MAX_DOWNLOAD_BYTES
+      ) {
+        return {
+          error: `Response body too large (${errorContext.contentLength} bytes). Maximum allowed: ${MAX_DOWNLOAD_BYTES} bytes.`,
+          code: "download_error",
+          phase: "loading",
+          retryable: false,
+          url: opts.url,
+          finalUrl: errorContext.finalUrl,
+          mimeType: errorContext.mimeType,
+          contentLength: errorContext.contentLength,
+        };
+      }
 
       if (!response.ok) {
         return {

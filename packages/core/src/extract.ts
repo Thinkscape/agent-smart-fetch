@@ -318,7 +318,9 @@ async function streamResponseToFile(
         typeof chunk === "string" ? Buffer.byteLength(chunk) : chunk.byteLength;
       if (!aborted && fileSize > MAX_DOWNLOAD_BYTES) {
         aborted = true;
-        source.destroy(new Error(`Download exceeded maximum size of ${MAX_DOWNLOAD_BYTES} bytes`));
+        (source as import("stream").Readable).destroy(
+          new Error(`Download exceeded maximum size of ${MAX_DOWNLOAD_BYTES} bytes`),
+        );
       }
     });
     try {

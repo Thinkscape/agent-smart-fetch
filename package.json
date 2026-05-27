@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.3.6",
   "type": "module",
-  "packageManager": "bun@1.3.9",
+  "packageManager": "pnpm@11.2.2",
   "description": "Bun monorepo for smart web fetching across pi and OpenClaw.",
   "license": "MIT",
   "author": "Thinkscape",
@@ -15,9 +15,7 @@
   "bugs": {
     "url": "https://github.com/Thinkscape/agent-smart-fetch/issues"
   },
-  "workspaces": [
-    "packages/*"
-  ],
+
   "pi": {
     "image": "https://raw.githubusercontent.com/Thinkscape/agent-smart-fetch/master/packages/pi-smart-fetch/demo.gif"
   },

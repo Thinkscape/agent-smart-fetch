@@ -35,16 +35,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
         with:
-          bun-version: latest
+          version: latest
 
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Upgrade npm
         run: npm install -g npm@latest
@@ -57,7 +63,7 @@ jobs:
           node -e "const { execSync } = require('node:child_process'); const [major, minor, patch] = execSync('npm --version', { encoding: 'utf8' }).trim().split('.').map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error('npm 11.5.1+ required for Trusted Publishing');"
 
       - name: Install dependencies
-        run: bun install
+        run: pnpm install --frozen-lockfile
 
       - name: Verify versions match tag
         if: startsWith(github.ref, 'refs/tags/v')
@@ -71,10 +77,10 @@ jobs:
           test "$(node -p "require('./packages/smart-fetch/package.json').version")" = "$TAG_VERSION"
 
       - name: Verify workspace
-        run: bun run check
+        run: pnpm run check
 
       - name: Package dry runs
-        run: bun run pack:dry-run:all
+        run: pnpm run pack:dry-run:all
 
       # Keep npm publish here even though the repo is Bun-first.
       # npm Trusted Publishing for this repo is wired to npm publish + provenance,

@@ -3,8 +3,8 @@ import {
   getAgentDir,
   getMarkdownTheme,
   keyText,
-} from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import {
   type BatchFetchItemProgress,

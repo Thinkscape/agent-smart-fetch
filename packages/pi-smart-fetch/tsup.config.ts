@@ -11,7 +11,7 @@ export default defineConfig({
   splitting: false,
   treeshake: true,
   external: [
-    "@mariozechner/pi-coding-agent",
+    "@earendil-works/pi-coding-agent",
     "@sinclair/typebox",
     "wreq-js",
     "defuddle",

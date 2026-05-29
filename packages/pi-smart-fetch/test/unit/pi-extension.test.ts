@@ -2,7 +2,7 @@ import { describe, expect, it, mock } from "bun:test";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type ExtensionAPI, initTheme } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, initTheme } from "@earendil-works/pi-coding-agent";
 import piSmartFetchExtension from "../../src/index";
 
 interface RenderTheme {

@@ -58,7 +58,7 @@
     "pack:dry-run": "bun run build && npm pack --dry-run"
   },
   "dependencies": {
-    "@earendil-works/pi-tui": "^0.77.0",
+    "@earendil-works/pi-tui": "^0.79.3",
     "@sinclair/typebox": "^0.34.49",
     "wreq-js": "^2.3.1",
     "defuddle": "^0.18.1",

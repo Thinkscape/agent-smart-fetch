@@ -17,7 +17,7 @@
     },
     "packages/core": {
       "name": "smart-fetch-core",
-      "version": "0.3.11",
+      "version": "0.3.12",
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
         "defuddle": "^0.18.1",
@@ -29,7 +29,7 @@
     },
     "packages/openclaw-smart-fetch": {
       "name": "openclaw-smart-fetch",
-      "version": "0.3.11",
+      "version": "0.3.12",
       "dependencies": {
         "@sinclair/typebox": "^0.34.49",
         "defuddle": "^0.18.1",
@@ -39,9 +39,9 @@
     },
     "packages/pi-smart-fetch": {
       "name": "pi-smart-fetch",
-      "version": "0.3.11",
+      "version": "0.3.12",
       "dependencies": {
-        "@earendil-works/pi-tui": "^0.77.0",
+        "@earendil-works/pi-tui": "^0.79.3",
         "@sinclair/typebox": "^0.34.49",
         "defuddle": "^0.18.1",
         "linkedom": "^0.18.12",
@@ -53,7 +53,7 @@
     },
     "packages/smart-fetch": {
       "name": "@thinkscape/smart-fetch",
-      "version": "0.3.11",
+      "version": "0.3.12",
       "bin": {
         "smart-fetch": "./dist/cli.js",
         "sf": "./dist/cli.js",
@@ -147,7 +147,7 @@
 
     "@earendil-works/pi-coding-agent": ["@earendil-works/pi-coding-agent@0.79.3", "", { "dependencies": { "@earendil-works/pi-agent-core": "^0.79.3", "@earendil-works/pi-ai": "^0.79.3", "@earendil-works/pi-tui": "^0.79.3", "@silvia-odwyer/photon-node": "0.3.4", "chalk": "5.6.2", "cross-spawn": "7.0.6", "diff": "8.0.4", "glob": "13.0.6", "highlight.js": "10.7.3", "hosted-git-info": "9.0.3", "ignore": "7.0.5", "jiti": "2.7.0", "minimatch": "10.2.5", "proper-lockfile": "4.1.2", "typebox": "1.1.38", "undici": "8.3.0", "yaml": "2.9.0" }, "optionalDependencies": { "@mariozechner/clipboard": "0.3.9" }, "bin": { "pi": "dist/cli.js" } }, "sha512-B3rAyw4/f1l3EYjQpCKpevzuBIPjYor6fHxPHQpLMdn/NTv3536i1P4ZrsyFkKpXqJWH66xKK5hyf8sqRe3dGA=="],
 
-    "@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.77.0", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "15.0.12" } }, "sha512-QV/eYtcT3hM9pJjLCkjUFOUmgAm4GPzJ0K4kofVq9+BGU7wNJVzflTO4VY2tYpaI4VSo6A5Hsuw00wY/CDmY/Q=="],
+    "@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.79.3", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "15.0.12" } }, "sha512-cpmkEM1aEuGUx6YZM36VlzpulwLzqD5T2cUEkGHndDTNGEbnn5sj/9SYm+QBfKjvZsWoHfZuFBnu4+hh96/FbA=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.27.7", "", { "os": "aix", "cpu": "ppc64" }, "sha512-EKX3Qwmhz1eMdEJokhALr0YiD0lhQNwDqkPYyPhiSwKrh7/4KRjQc04sZ8db+5DVVnZ1LmbNDI1uAMPEUBnQPg=="],
 
@@ -692,8 +692,6 @@
     "@aws-sdk/token-providers/@smithy/types": ["@smithy/types@4.14.2", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-P+otAxbV4CqBybp7EkcJCrig63yE2E7PuNVOmilVMRcx/O+QDzGULTrKsq4DV13gSfak9ObPrWaHl/9bL5YcWw=="],
 
     "@aws-sdk/xml-builder/@smithy/types": ["@smithy/types@4.14.2", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-P+otAxbV4CqBybp7EkcJCrig63yE2E7PuNVOmilVMRcx/O+QDzGULTrKsq4DV13gSfak9ObPrWaHl/9bL5YcWw=="],
-
-    "@earendil-works/pi-coding-agent/@earendil-works/pi-tui": ["@earendil-works/pi-tui@0.79.3", "", { "dependencies": { "get-east-asian-width": "1.6.0", "marked": "15.0.12" } }, "sha512-cpmkEM1aEuGUx6YZM36VlzpulwLzqD5T2cUEkGHndDTNGEbnn5sj/9SYm+QBfKjvZsWoHfZuFBnu4+hh96/FbA=="],
 
     "@smithy/core/@smithy/types": ["@smithy/types@4.14.2", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-P+otAxbV4CqBybp7EkcJCrig63yE2E7PuNVOmilVMRcx/O+QDzGULTrKsq4DV13gSfak9ObPrWaHl/9bL5YcWw=="],
 

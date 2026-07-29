@@ -67,9 +67,9 @@
     "pack:dry-run": "bun run build && npm pack --dry-run"
   },
   "dependencies": {
-    "@sinclair/typebox": "^0.34.49",
+    "@sinclair/typebox": "^0.34.52",
     "wreq-js": "^2.3.1",
-    "defuddle": "^0.18.1",
-    "linkedom": "^0.18.12"
+    "defuddle": "^0.19.2",
+    "linkedom": "^0.18.13"
   }
 }

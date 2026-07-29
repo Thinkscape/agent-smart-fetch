@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.14 - 2026-07-29
+
+- **patch**: fix: support npm 12 pack output
+
 ## v0.3.13 - 2026-07-29
 
 - **patch**: chore(deps): upgrade key dependencies

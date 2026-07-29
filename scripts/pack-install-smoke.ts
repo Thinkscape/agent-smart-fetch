@@ -11,6 +11,8 @@ type NpmPackResult = {
   version?: string;
 };
 
+type NpmPackJson = NpmPackResult[] | Record<string, NpmPackResult>;
+
 const packageDirs = process.argv.slice(2);
 if (packageDirs.length === 0) {
   console.error(
@@ -32,7 +34,11 @@ for (const packageDir of packageDirs) {
     cwd: absPackageDir,
     encoding: "utf8",
   });
-  const [packResult] = JSON.parse(packJson) as NpmPackResult[];
+  const parsedPackJson = JSON.parse(packJson) as NpmPackJson;
+  const packResults = Array.isArray(parsedPackJson)
+    ? parsedPackJson
+    : Object.values(parsedPackJson);
+  const [packResult] = packResults;
   if (!packResult?.filename) {
     throw new Error(`npm pack did not return a filename for ${packageDir}`);
   }

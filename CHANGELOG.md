@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.15 - 2026-07-29
+
+- **patch**: chore(deps): update actions/checkout action to v6 (#13)
+
 ## v0.3.14 - 2026-07-29
 
 - **patch**: fix: support npm 12 pack output

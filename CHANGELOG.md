@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.16 - 2026-07-29
+
+- **patch**: chore(deps): update actions/setup-node action to v6 (#14)
+
 ## v0.3.15 - 2026-07-29
 
 - **patch**: chore(deps): update actions/checkout action to v6 (#13)

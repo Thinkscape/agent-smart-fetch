@@ -1,6 +1,6 @@
 {
   "name": "pi-smart-fetch",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "type": "module",
   "description": "Smart web_fetch with desktop-browser TLS impersonation and defuddle extraction.",
   "license": "MIT",

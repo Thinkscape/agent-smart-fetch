@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.17 - 2026-07-29
+
+- **patch**: chore(deps): update dependency node (#19)
+
 ## v0.3.16 - 2026-07-29
 
 - **patch**: chore(deps): update actions/setup-node action to v6 (#14)

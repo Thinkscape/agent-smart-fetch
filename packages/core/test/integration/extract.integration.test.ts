@@ -80,7 +80,7 @@ describeIf("integration: extraction pipeline", () => {
 
         expect(isError(result)).toBe(false);
         if (!isError(result)) {
-          expect(result.finalUrl).toContain("/tutorials/data/");
+          expect(result.finalUrl).toContain("/documentation/");
           expect(result.finalUrl).toEndWith(".md");
           expect(result.content).not.toContain("This page requires JavaScript");
           expect(result.wordCount).toBeGreaterThan(20);

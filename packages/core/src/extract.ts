@@ -404,6 +404,15 @@ function isTwitterJsDisabledPage(document: Document, url: string): boolean {
   );
 }
 
+function isJsDisabledShellContent(content: string | undefined): boolean {
+  if (!content) return false;
+  // Server-rendered JS-disabled shells (e.g. developer.apple.com) contain a
+  // handful of noscript boilerplate words, which can exceed the word-count
+  // threshold alone. Detect the marker so the alternate-link fallback still
+  // fires for these pages.
+  return /(?:requires|needs)\s+JavaScript/i.test(content);
+}
+
 function extractDomTextFallback(document: Document): string {
   const bodyText =
     document.body?.textContent ?? document.documentElement?.textContent ?? "";
@@ -1646,8 +1655,9 @@ export function createDefuddleFetch(
         format === "text" ? extractedContent : markdownToText(extractedContent),
       );
       if (
-        Math.min(wordCount, extractedTextWordCount) <
-          MIN_EXTRACTED_WORDS_BEFORE_ALTERNATE_FALLBACK &&
+        (Math.min(wordCount, extractedTextWordCount) <
+          MIN_EXTRACTED_WORDS_BEFORE_ALTERNATE_FALLBACK ||
+          isJsDisabledShellContent(extractedContent)) &&
         alternateLinks.length > 0
       ) {
         const alternateResult = await tryAlternateLinkFallback();

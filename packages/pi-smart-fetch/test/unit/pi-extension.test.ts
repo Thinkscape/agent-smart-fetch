@@ -157,7 +157,7 @@ describe("pi extension", () => {
     );
   });
 
-  it("renders web_fetch call header, compact collapsed result, and full output when expanded", () => {
+  it("renders web_fetch call header and a compact result summary without page content", () => {
     const registeredTool = findTool("web_fetch");
     expect(registeredTool.renderResult).toBeDefined();
 
@@ -167,6 +167,20 @@ describe("pi extension", () => {
     const callText = callLines?.join("\n") ?? "";
     expect(callText).toContain("web_fetch https://example.com/article");
 
+    const pageLines = [
+      "# Example Article",
+      "Line 1",
+      "Line 2",
+      "Line 3",
+      "Line 4",
+      "Line 5",
+      "Line 6",
+      "Line 7",
+      "Line 8",
+      "Line 9",
+    ];
+    const pageContent = pageLines.join("\n");
+
     const result = {
       content: [
         {
@@ -181,16 +195,7 @@ describe("pi extension", () => {
             "> Words: 321",
             "> Browser: chrome_145/windows",
             "",
-            "# Example Article",
-            "Line 1",
-            "Line 2",
-            "Line 3",
-            "Line 4",
-            "Line 5",
-            "Line 6",
-            "Line 7",
-            "Line 8",
-            "Line 9",
+            pageContent,
           ].join("\n"),
         },
       ],
@@ -198,67 +203,46 @@ describe("pi extension", () => {
         verbose: false,
         format: "markdown",
         maxChars: 50000,
-        fetchResult: {
+        fetchSummary: {
+          kind: "content",
           url: "https://example.com/article",
           finalUrl: "https://example.com/article",
-          title: "Example Article",
-          author: "",
-          published: "2026-04-10",
-          site: "Example",
-          language: "en",
+          ok: true,
+          charCount: pageContent.length,
           wordCount: 321,
-          content: [
-            "# Example Article",
-            "Line 1",
-            "Line 2",
-            "Line 3",
-            "Line 4",
-            "Line 5",
-            "Line 6",
-            "Line 7",
-            "Line 8",
-            "Line 9",
-          ].join("\n"),
-          browser: "chrome_145",
-          os: "windows",
+          truncated: false,
+          title: "Example Article",
+          published: "2026-04-10",
         },
       },
     };
 
-    const collapsedLines = registeredTool
-      .renderResult?.(result, { expanded: false }, testTheme)
-      .render(120);
-    const collapsedText = collapsedLines?.join("\n") ?? "";
-    expect(collapsedText).toContain("Title: Example Article");
-    expect(collapsedText).toContain("Published: 2026-04-10");
-    expect(collapsedText).not.toContain("URL: https://example.com/article");
-    expect(collapsedText).not.toContain("Author: Ada Lovelace");
-    expect(collapsedText).not.toContain("Site: Example");
-    expect(collapsedText).not.toContain("Language: en");
-    expect(collapsedText).not.toContain("Words: 321");
-    expect(collapsedText).not.toContain("Browser: chrome_145/windows");
-    expect(collapsedText).toContain("Example Article");
-    expect(collapsedText).toContain("Line 6");
-    expect(collapsedText).not.toContain("Line 8");
-    expect(collapsedText).toContain("Ctrl+O to expand");
-    expect(collapsedText).not.toContain("web_fetch Example Article");
+    // Collapsed and expanded views render the same compact summary: the page
+    // text is not stored in details, so there is nothing to expand.
+    for (const expanded of [false, true] as const) {
+      const lines = registeredTool
+        .renderResult?.(result, { expanded }, testTheme)
+        .render(120);
+      const text = lines?.join("\n") ?? "";
 
-    const expandedLines = registeredTool
-      .renderResult?.(result, { expanded: true }, testTheme)
-      .render(120);
-    const expandedText = expandedLines?.join("\n") ?? "";
-    expect(expandedText).toContain("Title: Example Article");
-    expect(expandedText).toContain("Published: 2026-04-10");
-    expect(expandedText).not.toContain("URL: https://example.com/article");
-    expect(expandedText).not.toContain("Author: Ada Lovelace");
-    expect(expandedText).toContain("Example Article");
-    expect(expandedText).toContain("Line 9");
+      expect(text).toContain("Title: Example Article");
+      expect(text).toContain("Published: 2026-04-10");
+      expect(text).toContain(`${pageContent.length} chars · 321 words`);
+      expect(text).toContain("Full content was delivered to the agent.");
+
+      // No page content and no expand hint in the TUI view.
+      expect(text).not.toContain("Line 1");
+      expect(text).not.toContain("# Example Article");
+      expect(text).not.toContain("Ctrl+O");
+    }
   });
 
   it("renders user-facing metadata with YAML-like key and string colors", () => {
     const registeredTool = findTool("web_fetch");
     expect(registeredTool.renderResult).toBeDefined();
 
+    const pageContent = "# Example Article";
+
     const result = {
       content: [
         {
@@ -273,7 +257,7 @@ describe("pi extension", () => {
             "> Words: 321",
             "> Browser: chrome_145/windows",
             "",
-            "# Example Article",
+            pageContent,
           ].join("\n"),
         },
       ],
@@ -281,18 +265,16 @@ describe("pi extension", () => {
         verbose: false,
         format: "markdown",
         maxChars: 50000,
-        fetchResult: {
+        fetchSummary: {
+          kind: "content",
           url: "https://example.com/article",
           finalUrl: "https://example.com/article",
-          title: "Example Article",
-          author: "Ada Lovelace",
-          published: "2026-04-10",
-          site: "Example",
-          language: "en",
+          ok: true,
+          charCount: pageContent.length,
           wordCount: 321,
-          content: "# Example Article",
-          browser: "chrome_145",
-          os: "windows",
+          truncated: false,
+          title: "Example Article",
+          published: "2026-04-10",
         },
       },
     };
@@ -367,19 +349,11 @@ describe("pi extension", () => {
         verbose: false,
         format: "markdown",
         maxChars: 50000,
-        fetchResult: {
+        fetchSummary: {
           kind: "file",
           url: "https://example.com/file.pdf",
           finalUrl: "https://example.com/file.pdf",
-          title: "",
-          author: "",
-          published: "",
-          site: "example.com",
-          language: "",
-          wordCount: 0,
-          content: "",
-          browser: "chrome_145",
-          os: "windows",
+          ok: true,
           filePath: "/tmp/file.pdf",
           fileSize: 42,
           mimeType: "application/pdf",
@@ -430,7 +404,20 @@ describe("pi extension", () => {
     expect(response.content[0]?.text).toContain(
       "Error: Invalid URL: not-a-url",
     );
-    expect(response.details?.batchResult).toBeDefined();
+    expect(response.details?.batchSummary).toBeDefined();
     expect(response.details?.batchProgress).toBeDefined();
+
+    const details = response.details as {
+      batchSummary?: {
+        items?: Array<Record<string, unknown>>;
+      };
+    };
+    expect(details?.batchSummary?.items?.[0]).toMatchObject({
+      index: 0,
+      url: "not-a-url",
+      ok: false,
+      status: "error",
+    });
+    expect(details?.batchSummary?.items?.[0]?.error).toContain("Invalid URL");
   });
 });

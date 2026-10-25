@@ -9,6 +9,7 @@ describe("resolveFetchToolDefaults", () => {
   it("includes batchConcurrency with the default value", () => {
     expect(resolveFetchToolDefaults()).toEqual({
       maxChars: 50000,
+      maxResponseBytes: 1048576,
       timeoutMs: 15000,
       browser: "chrome_145",
       os: "windows",
@@ -17,6 +18,12 @@ describe("resolveFetchToolDefaults", () => {
       batchConcurrency: 8,
       tempDir: undefined,
     });
+  });
+
+  it("accepts a maxResponseBytes override", () => {
+    expect(
+      resolveFetchToolDefaults({ maxResponseBytes: 4096 }).maxResponseBytes,
+    ).toBe(4096);
   });
 
   it("normalizes batchConcurrency overrides", () => {
@@ -47,6 +54,45 @@ describe("createBatchFetchToolParameterProperties", () => {
     expect(schema.requests?.minItems).toBe(1);
     expect(schema.requests?.items?.required).toContain("url");
     expect(schema.requests?.items?.properties?.proxy?.type).toBe("string");
+  });
+
+  it("exposes maxResponseBytes with its default in the description", () => {
+    const schema = createBatchFetchToolParameterProperties(
+      resolveFetchToolDefaults(),
+    ) as {
+      requests?: {
+        items?: {
+          properties?: Record<string, { type?: string; description?: string }>;
+        };
+      };
+    };
+
+    const property = schema.requests?.items?.properties?.maxResponseBytes;
+    expect(property?.type).toBe("number");
+    expect(property?.description).toContain("Default: 1048576");
+  });
+});
+
+describe("tool fetch options", () => {
+  it("passes maxResponseBytes from the request, falling back to the configured default", async () => {
+    const result = await executeBatchFetchToolCall(
+      {
+        requests: [
+          { url: "https://example.com/explicit", maxResponseBytes: 2048 },
+          { url: "https://example.com/default" },
+        ],
+      },
+      resolveFetchToolDefaults({ maxResponseBytes: 4096 }),
+      {
+        async executeItem(params) {
+          return { error: `not fetched: ${params.url}` };
+        },
+      },
+    );
+
+    expect(result.items.map((item) => item.request.maxResponseBytes)).toEqual([
+      2048, 4096,
+    ]);
   });
 });
 

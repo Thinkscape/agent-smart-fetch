@@ -475,7 +475,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
     label: "web_fetch",
     description: toolDescription,
     promptSnippet:
-      "web_fetch(url, browser?, os?, headers?, maxChars?, timeoutMs?, format?, removeImages?, includeReplies?, proxy?, verbose?): fetch browser-fingerprinted readable web content with full agent metadata and a compact pi preview",
+      "web_fetch(url, browser?, os?, headers?, maxChars?, maxResponseBytes?, timeoutMs?, format?, removeImages?, includeReplies?, proxy?, verbose?): fetch browser-fingerprinted readable web content with full agent metadata and a compact pi preview",
     parameters: Type.Object({
       ...createBaseFetchToolParameterProperties(defaults),
       verbose: Type.Optional(

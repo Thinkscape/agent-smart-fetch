@@ -141,6 +141,55 @@ describe("error formatting", () => {
     expect(output).toContain("> Suggested timeoutMs: 120000");
     expect(output).toContain("The timeoutMs parameter is configurable.");
   });
+
+  it("points processing timeouts at maxResponseBytes", () => {
+    const output = buildFetchErrorResponseText({
+      error:
+        "Timeout of 15000ms exceeded while processing the response from https://docs.rs/big.",
+      code: "timeout",
+      phase: "processing",
+      timeoutMs: 15000,
+      url: "https://docs.rs/big",
+    });
+
+    expect(output).toContain("> Phase: processing the response");
+    expect(output).toContain(
+      "a smaller maxResponseBytes makes it process less of the page.",
+    );
+  });
+
+  it("summarizes oversized responses", () => {
+    expect(
+      buildUserFacingFetchErrorSummary({
+        error: "whatever",
+        code: "response_too_large",
+        phase: "loading",
+      }),
+    ).toBe("The response is larger than the maxResponseBytes limit.");
+  });
+
+  it("renders oversized-response errors with the limit and a suggested maxResponseBytes", () => {
+    const output = buildFetchErrorResponseText({
+      error:
+        "Response body from https://example.com/data.json exceeds maxResponseBytes (1.00 MB); a truncated JSON document cannot be parsed.",
+      code: "response_too_large",
+      phase: "loading",
+      retryable: false,
+      url: "https://example.com/data.json",
+      mimeType: "application/json",
+      contentLength: 5_300_000,
+      maxResponseBytes: 1024 * 1024,
+    });
+
+    expect(output).toContain("Error: Response body from");
+    expect(output).toContain("> Phase: downloading the response body");
+    expect(output).toContain("> Content-Length: 5300000 bytes (5.05 MB)");
+    expect(output).toContain("> maxResponseBytes: 1048576 bytes (1.00 MB)");
+    expect(output).toContain("> Suggested maxResponseBytes: 6291456");
+    expect(output).toContain(
+      "The maxResponseBytes parameter is configurable. Retry this call with a higher maxResponseBytes value.",
+    );
+  });
 });
 
 describe("metadata formatting", () => {
@@ -218,6 +267,26 @@ describe("metadata formatting", () => {
         "> Words: 321",
         "> Browser: chrome_145/windows",
       ].join("\n"),
+    );
+  });
+
+  it("reports a truncated response body in both metadata headers", () => {
+    const truncatedResult: FetchResult = {
+      ...result,
+      responseTruncated: { bytesRead: 1024 * 1024, contentLength: 24_278_262 },
+    };
+    const line =
+      "> Truncated: read the first 1.00 MB of 23.2 MB of the response body; raise maxResponseBytes to read more";
+
+    expect(buildCompactMetadataHeader(truncatedResult)).toContain(line);
+    expect(buildMetadataHeader(truncatedResult)).toContain(line);
+    expect(
+      buildCompactMetadataHeader({
+        ...result,
+        responseTruncated: { bytesRead: 65536 },
+      }),
+    ).toContain(
+      "> Truncated: read the first 64.0 KB of the response body; raise maxResponseBytes to read more",
     );
   });
 

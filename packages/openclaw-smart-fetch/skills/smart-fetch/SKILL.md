@@ -56,7 +56,8 @@ Limitations — escalate to the **browser** tool for:
 | `os`               | `string`                        | OS profile: `windows`, `macos`, `linux`, `android`, `ios`                     |
 | `headers`          | `Record<string,string>`         | Custom HTTP headers                                                           |
 | `maxChars`         | `number`                        | Max characters to return (default: 50000)                                     |
-| `timeoutMs`        | `number`                        | Request timeout in ms (default: 15000)                                        |
+| `maxResponseBytes` | `number`                        | Max response bytes to read; longer pages are cut first (default: 1048576)     |
+| `timeoutMs`        | `number`                        | Request timeout in ms, applied again to extraction (default: 15000)           |
 | `format`           | `string`                        | Output: `markdown` (default), `html`, `text`, `json`, `raw`                  |
 | `removeImages`     | `boolean`                       | Strip image references (default: false)                                       |
 | `includeReplies`   | `boolean` or `"extractors"`     | Include comments/replies (default: `"extractors"`)                            |

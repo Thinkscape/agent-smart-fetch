@@ -91,7 +91,8 @@ sf https://example.com --format text | wc -w
 | `--os <name>` | OS profile | `windows` |
 | `--format <fmt>` | Output format: `markdown`, `html`, `text`, `json`, `raw` | `markdown` |
 | `--max-chars <n>` | Max characters to return | `50000` |
-| `--timeout <ms>` | Request timeout in milliseconds | `15000` |
+| `--max-response-bytes <n>` | Max bytes of a text response to read; longer pages are cut before extraction (a single `--raw` fetch reads everything unless set) | `1048576` |
+| `--timeout <ms>` | Request timeout in milliseconds; content extraction gets the same budget | `15000` |
 | `--remove-images` | Strip image references from output | off |
 | `--include-replies <mode>` | Include replies: `true`, `false`, `extractors` | `extractors` |
 | `--proxy <url>` | Proxy URL (`http://user:pass@host:port` or `socks5://...`) | — |

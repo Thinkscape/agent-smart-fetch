@@ -19,6 +19,7 @@ const VALID_OS_VALUES = new Set<FingerprintOs>([
 interface PiSmartFetchSettings {
   smartFetchVerboseByDefault?: boolean;
   smartFetchDefaultMaxChars?: number;
+  smartFetchDefaultMaxResponseBytes?: number;
   smartFetchDefaultTimeoutMs?: number;
   smartFetchDefaultBrowser?: string;
   smartFetchDefaultOs?: FingerprintOs;
@@ -118,6 +119,9 @@ function normalizePiSmartFetchSettings(input: unknown): PiSmartFetchSettings {
       "smartFetchDefaultMaxChars",
       "webFetchDefaultMaxChars",
     ]),
+    smartFetchDefaultMaxResponseBytes: readPositiveNumber(source, [
+      "smartFetchDefaultMaxResponseBytes",
+    ]),
     smartFetchDefaultTimeoutMs: readPositiveNumber(source, [
       "smartFetchDefaultTimeoutMs",
     ]),
@@ -156,6 +160,9 @@ export function resolvePiSmartFetchSettings(
       false,
     maxChars:
       project.smartFetchDefaultMaxChars ?? global.smartFetchDefaultMaxChars,
+    maxResponseBytes:
+      project.smartFetchDefaultMaxResponseBytes ??
+      global.smartFetchDefaultMaxResponseBytes,
     timeoutMs:
       project.smartFetchDefaultTimeoutMs ?? global.smartFetchDefaultTimeoutMs,
     browser:

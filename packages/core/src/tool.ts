@@ -4,6 +4,7 @@ import {
   DEFAULT_BROWSER,
   DEFAULT_INCLUDE_REPLIES,
   DEFAULT_MAX_CHARS,
+  DEFAULT_MAX_RESPONSE_BYTES,
   DEFAULT_OS,
   DEFAULT_TIMEOUT_MS,
 } from "./constants";
@@ -39,6 +40,7 @@ export function resolveFetchToolDefaults(
 ): FetchToolDefaults {
   return {
     maxChars: config.maxChars ?? DEFAULT_MAX_CHARS,
+    maxResponseBytes: config.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES,
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     browser: config.browser ?? DEFAULT_BROWSER,
     os: config.os ?? DEFAULT_OS,
@@ -75,9 +77,14 @@ export function createBaseFetchToolParameterProperties(
         description: `Maximum characters to return. Default: ${defaults.maxChars}`,
       }),
     ),
+    maxResponseBytes: Type.Optional(
+      Type.Number({
+        description: `Maximum bytes of a text response to read. Longer responses are cut at this size before extraction and marked as truncated; oversized JSON returns an error. Default: ${defaults.maxResponseBytes}`,
+      }),
+    ),
     timeoutMs: Type.Optional(
       Type.Number({
-        description: `Request timeout in milliseconds. Default: ${defaults.timeoutMs}`,
+        description: `Timeout in milliseconds for the request, and again for extracting its content. Default: ${defaults.timeoutMs}`,
       }),
     ),
     format: Type.Optional(
@@ -142,6 +149,8 @@ function buildFetchOptionsFromParams(
     os: (params.os as string) ?? defaults.os,
     headers: params.headers as Record<string, string> | undefined,
     maxChars: (params.maxChars as number) ?? defaults.maxChars,
+    maxResponseBytes:
+      (params.maxResponseBytes as number) ?? defaults.maxResponseBytes,
     format:
       (params.format as "markdown" | "html" | "text" | "json") ?? "markdown",
     removeImages: (params.removeImages as boolean) ?? defaults.removeImages,

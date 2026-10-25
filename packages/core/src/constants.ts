@@ -3,6 +3,10 @@ import type { FingerprintOs } from "./types";
 export const DEFAULT_BROWSER = "chrome_145";
 export const DEFAULT_OS: FingerprintOs = "windows";
 export const DEFAULT_MAX_CHARS = 50_000;
+// Text responses are read up to this many bytes; longer ones are cut and
+// marked truncated. This bounds memory and the input to extraction, whose
+// running time is bounded separately by the timeout.
+export const DEFAULT_MAX_RESPONSE_BYTES = 1024 * 1024;
 export const DEFAULT_TIMEOUT_MS = 15_000;
 export const DEFAULT_BATCH_CONCURRENCY = 8;
 export const DEFAULT_INCLUDE_REPLIES = "extractors" as const;

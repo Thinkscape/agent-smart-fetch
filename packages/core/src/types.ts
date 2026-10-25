@@ -17,6 +17,7 @@ export interface FetchOptions {
   headers?: Record<string, string>;
   format?: OutputFormat;
   maxChars?: number;
+  maxResponseBytes?: number;
   removeImages?: boolean;
   includeReplies?: IncludeRepliesOption;
   proxy?: string;
@@ -38,9 +39,17 @@ interface BaseFetchResult {
   contentType?: string;
 }
 
+export interface ResponseTruncation {
+  bytesRead: number;
+  /** Declared Content-Length, when the server sent one. */
+  contentLength?: number;
+}
+
 export interface ContentFetchResult extends BaseFetchResult {
   kind: "content";
   content: string;
+  /** Set when the body was longer than maxResponseBytes; only a prefix was read. */
+  responseTruncated?: ResponseTruncation;
 }
 
 export interface FileFetchResult extends BaseFetchResult {
@@ -63,7 +72,8 @@ export type FetchErrorCode =
   | "processing_error"
   | "download_error"
   | "no_content"
-  | "too_many_redirects";
+  | "too_many_redirects"
+  | "response_too_large";
 
 export type FetchErrorPhase =
   | "validation"
@@ -86,6 +96,7 @@ export interface FetchError {
   mimeType?: string;
   contentLength?: number;
   downloadedBytes?: number;
+  maxResponseBytes?: number;
 }
 
 export interface BatchFetchItemProgress {
@@ -169,6 +180,38 @@ export interface FetchResponseLike {
   readable(): NodeJS.ReadableStream;
 }
 
+export interface HtmlAnalysisRequest {
+  html: string;
+  /** URL the document was served from, after redirects. */
+  url: string;
+  /** URL the caller asked for; X/Twitter shell detection keys off it. */
+  requestUrl: string;
+  /** Requested output format; decides which alternate links qualify. */
+  format: OutputFormat;
+  /** Defuddle options. Omit to only read alternate links and page signals. */
+  extract?: {
+    markdown: boolean;
+    removeImages: boolean;
+    includeReplies: IncludeRepliesOption;
+  };
+  /** DOM fallback to render when Defuddle finds no content. */
+  fallback?: "text" | "markdown";
+}
+
+export interface HtmlAnalysis {
+  alternateLinks: string[];
+  isXJsDisabledShell: boolean;
+  extraction?: {
+    extracted: ExtractedContent;
+    /** Message of the error Defuddle threw, if it threw. */
+    error?: string;
+    /** String arguments of each console.error call made during extraction. */
+    consoleErrors: string[][];
+    /** Fallback rendered from an unmodified parse of the page. */
+    fallback?: { text: string; markdown?: string };
+  };
+}
+
 export interface FetchDependencies {
   fetch(
     url: string,
@@ -180,10 +223,21 @@ export interface FetchDependencies {
     options: Record<string, unknown>,
   ): Promise<ExtractedContent>;
   getProfiles(): string[];
+  /**
+   * Parses and extracts an HTML body. When set, `defuddle` is not called by
+   * the pipeline; without it, extraction runs in-process with `defuddle`. The
+   * runtime dependencies run it on a worker thread that is terminated after
+   * `timeoutMs`.
+   */
+  analyzeHtml?(
+    request: HtmlAnalysisRequest,
+    options: { timeoutMs: number },
+  ): Promise<HtmlAnalysis>;
 }
 
 export interface FetchToolConfig {
   maxChars?: number;
+  maxResponseBytes?: number;
   timeoutMs?: number;
   browser?: string;
   os?: string;
@@ -195,6 +249,7 @@ export interface FetchToolConfig {
 
 export interface FetchToolDefaults {
   maxChars: number;
+  maxResponseBytes: number;
   timeoutMs: number;
   browser: string;
   os: string;

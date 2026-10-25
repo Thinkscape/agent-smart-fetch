@@ -1,9 +1,13 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: {
+    index: "src/index.ts",
+    // smart-fetch-core starts this as ./html-analysis-worker.js next to the bundle.
+    "html-analysis-worker": "../core/src/html-analysis-worker.ts",
+  },
   format: ["esm"],
-  dts: true,
+  dts: { entry: { index: "src/index.ts" } },
   sourcemap: true,
   clean: true,
   bundle: true,

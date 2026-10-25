@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import plugin, { resolvePluginDefaults } from "../src/index";
@@ -17,11 +18,33 @@ describe("resolvePluginDefaults", () => {
       browser: "firefox_147",
       os: "windows",
       maxChars: 1000,
+      maxResponseBytes: 1048576,
       timeoutMs: 15000,
       removeImages: true,
       includeReplies: "extractors",
       batchConcurrency: 3,
       tempDir: join(tmpdir(), "smart-fetch-openclaw"),
+    });
+  });
+
+  it("accepts maxResponseBytes from plugin config and declares it in the manifest", async () => {
+    expect(
+      resolvePluginDefaults({ maxResponseBytes: 262_144 }).maxResponseBytes,
+    ).toBe(262_144);
+
+    const manifest = JSON.parse(
+      await readFile(
+        join(import.meta.dir, "..", "openclaw.plugin.json"),
+        "utf-8",
+      ),
+    ) as {
+      configSchema: {
+        properties: Record<string, { type?: string; default?: unknown }>;
+      };
+    };
+    expect(manifest.configSchema.properties.maxResponseBytes).toMatchObject({
+      type: "number",
+      default: 1048576,
     });
   });
 });

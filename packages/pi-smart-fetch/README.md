@@ -56,7 +56,7 @@ Registers:
 Synopsis:
 
 ```text
-web_fetch(url, browser?, os?, headers?, maxChars?, timeoutMs?, format?, removeImages?, includeReplies?, proxy?, verbose?)
+web_fetch(url, browser?, os?, headers?, maxChars?, maxResponseBytes?, timeoutMs?, format?, removeImages?, includeReplies?, proxy?, verbose?)
 batch_web_fetch(requests, verbose?)
 ```
 
@@ -80,6 +80,7 @@ Optional settings in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 {
   "smartFetchVerboseByDefault": false,
   "smartFetchDefaultMaxChars": 50000,
+  "smartFetchDefaultMaxResponseBytes": 1048576,
   "smartFetchDefaultTimeoutMs": 15000,
   "smartFetchDefaultBrowser": "chrome_145",
   "smartFetchDefaultOs": "windows",
@@ -94,7 +95,8 @@ Optional settings in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 |---|---:|---|
 | `smartFetchVerboseByDefault` | `false` | Stored default for the compatibility `verbose` flag |
 | `smartFetchDefaultMaxChars` | `50000` | Default `maxChars` limit |
-| `smartFetchDefaultTimeoutMs` | `15000` | Default request timeout in milliseconds |
+| `smartFetchDefaultMaxResponseBytes` | `1048576` | Default `maxResponseBytes`: bytes of a text response read before extraction; longer pages are cut and get a `Truncated:` metadata line |
+| `smartFetchDefaultTimeoutMs` | `15000` | Default request timeout in milliseconds; content extraction gets the same budget |
 | `smartFetchDefaultBrowser` | `chrome_145` | Default browser fingerprint profile |
 | `smartFetchDefaultOs` | `windows` | Default OS fingerprint profile |
 | `smartFetchDefaultRemoveImages` | `false` | Strip image references by default |

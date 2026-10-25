@@ -75,6 +75,21 @@ describe("resolvePiSmartFetchSettings", () => {
     });
   });
 
+  it("resolves smartFetchDefaultMaxResponseBytes with project settings over global settings", () => {
+    expect(
+      resolvePiSmartFetchSettings(
+        { smartFetchDefaultMaxResponseBytes: 4_194_304 },
+        { smartFetchDefaultMaxResponseBytes: 262_144 },
+      ).maxResponseBytes,
+    ).toBe(262_144);
+    expect(
+      resolvePiSmartFetchSettings(
+        { smartFetchDefaultMaxResponseBytes: 4_194_304 },
+        { smartFetchDefaultMaxResponseBytes: 0 },
+      ).maxResponseBytes,
+    ).toBe(4_194_304);
+  });
+
   it("accepts legacy webFetch settings as a fallback alias", () => {
     const resolved = resolvePiSmartFetchSettings(
       {

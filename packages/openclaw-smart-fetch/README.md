@@ -62,7 +62,7 @@ Registers:
 Synopsis:
 
 ```text
-smart_fetch(url, browser?, os?, headers?, maxChars?, timeoutMs?, format?, removeImages?, includeReplies?, proxy?)
+smart_fetch(url, browser?, os?, headers?, maxChars?, maxResponseBytes?, timeoutMs?, format?, removeImages?, includeReplies?, proxy?)
 batch_smart_fetch(requests)
 ```
 
@@ -154,6 +154,7 @@ See `openclaw.plugin.json` for the full schema. Configure under
         "enabled": true,
         "config": {
           "maxChars": 50000,
+          "maxResponseBytes": 1048576,
           "timeoutMs": 15000,
           "browser": "chrome_145",
           "os": "windows",
@@ -170,7 +171,8 @@ See `openclaw.plugin.json` for the full schema. Configure under
 | Setting | Default | Description |
 |---|---:|---|
 | `maxChars` | `50000` | Default maximum returned characters |
-| `timeoutMs` | `15000` | Default request timeout in milliseconds |
+| `maxResponseBytes` | `1048576` | Default maximum bytes of a text response to read; longer pages are cut before extraction and get a `Truncated:` metadata line |
+| `timeoutMs` | `15000` | Default request timeout in milliseconds; content extraction gets the same budget |
 | `browser` | `chrome_145` | Default browser fingerprint profile |
 | `os` | `windows` | Default OS fingerprint profile |
 | `removeImages` | `false` | Strip image references by default |

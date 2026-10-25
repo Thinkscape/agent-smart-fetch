@@ -19,12 +19,12 @@ import {
   DEFAULT_INCLUDE_REPLIES,
   DEFAULT_JSON_ACCEPT_HEADER,
   DEFAULT_MAX_CHARS,
+  DEFAULT_MAX_RESPONSE_BYTES,
   DEFAULT_OS,
   DEFAULT_RAW_ACCEPT_HEADER,
   DEFAULT_TIMEOUT_MS,
 } from "./constants";
 import { runtimeDependencies } from "./dependencies";
-import { parseLinkedomHTML } from "./dom";
 import {
   estimateWordCount,
   markdownToText,
@@ -33,8 +33,10 @@ import {
   stripExtractorComments,
   truncateContent,
 } from "./format";
+import { analyzeHtml } from "./html-analysis";
 import { getLatestChromeProfile as getLatestChromeProfileFrom } from "./profiles";
 import type {
+  ContentFetchResult,
   FetchDependencies,
   FetchError,
   FetchErrorPhase,
@@ -43,7 +45,10 @@ import type {
   FetchProgressUpdate,
   FetchResponseLike,
   FetchResult,
+  HtmlAnalysis,
+  HtmlAnalysisRequest,
   OutputFormat,
+  ResponseTruncation,
 } from "./types";
 
 export {
@@ -51,6 +56,7 @@ export {
   DEFAULT_BROWSER,
   DEFAULT_INCLUDE_REPLIES,
   DEFAULT_MAX_CHARS,
+  DEFAULT_MAX_RESPONSE_BYTES,
   DEFAULT_OS,
   DEFAULT_TIMEOUT_MS,
 } from "./constants";
@@ -367,7 +373,7 @@ function buildPlainTextResult(
   maxChars: number,
   browser: string,
   os: string,
-): FetchResult {
+): ContentFetchResult {
   const normalizedBody = rawBody.replace(/\r\n/g, "\n").trim();
   return {
     kind: "content",
@@ -386,220 +392,6 @@ function buildPlainTextResult(
     browser,
     os,
   };
-}
-
-/**
- * Detects X/Twitter "JavaScript is disabled" shell pages that indicate a tweet
- * no longer exists (deleted, protected, or suspended). When X returns these
- * pages instead of a proper 404, the oEmbed API also returns 404.
- */
-function isTwitterJsDisabledPage(document: Document, url: string): boolean {
-  if (!/^(https?:\/\/)?(www\.)?(x\.com|twitter\.com)\//i.test(url))
-    return false;
-  const text =
-    document.body?.textContent ?? document.documentElement?.textContent ?? "";
-  return (
-    text.includes("JavaScript is disabled") &&
-    text.includes("supported browser")
-  );
-}
-
-function extractDomTextFallback(document: Document): string {
-  const bodyText =
-    document.body?.textContent ?? document.documentElement?.textContent ?? "";
-  return bodyText
-    .replace(/\r\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .join("\n")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
-}
-
-function escapeMarkdownText(value: string): string {
-  return value.replace(/([\\`*_{}[\]()+#.!|>-])/g, "\\$1");
-}
-
-function normalizeInlineWhitespace(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function renderInlineMarkdown(node: Node): string {
-  if (node.nodeType === 3) {
-    return normalizeInlineWhitespace(node.textContent ?? "");
-  }
-
-  if (node.nodeType !== 1) {
-    return "";
-  }
-
-  const element = node as Element;
-  const tag = element.tagName.toLowerCase();
-
-  if (["script", "style", "meta", "link"].includes(tag)) {
-    return "";
-  }
-
-  if (tag === "br") {
-    return "  \n";
-  }
-
-  if (tag === "code") {
-    const content = normalizeInlineWhitespace(element.textContent ?? "");
-    return content ? `\`${content}\`` : "";
-  }
-
-  if (tag === "img") {
-    const alt = element.getAttribute("alt") ?? "";
-    const src = element.getAttribute("src") ?? "";
-    return src ? `![${escapeMarkdownText(alt)}](${src})` : "";
-  }
-
-  const childContent = Array.from(element.childNodes)
-    .map(renderInlineMarkdown)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  if (tag === "a") {
-    const href = element.getAttribute("href") ?? "";
-    if (!href) return childContent;
-    return `[${childContent || href}](${href})`;
-  }
-
-  if (["strong", "b"].includes(tag)) {
-    return childContent ? `**${childContent}**` : "";
-  }
-
-  if (["em", "i"].includes(tag)) {
-    return childContent ? `*${childContent}*` : "";
-  }
-
-  return childContent;
-}
-
-function renderBlockMarkdown(node: Node, depth = 0): string {
-  if (node.nodeType === 3) {
-    const text = normalizeInlineWhitespace(node.textContent ?? "");
-    return text ? `${text}\n\n` : "";
-  }
-
-  if (node.nodeType !== 1) {
-    return "";
-  }
-
-  const element = node as Element;
-  const tag = element.tagName.toLowerCase();
-
-  if (["script", "style", "meta", "link"].includes(tag)) {
-    return "";
-  }
-
-  if (/^h[1-6]$/.test(tag)) {
-    const level = Number.parseInt(tag.slice(1), 10);
-    const content = Array.from(element.childNodes)
-      .map(renderInlineMarkdown)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return content ? `${"#".repeat(level)} ${content}\n\n` : "";
-  }
-
-  if (tag === "p") {
-    const content = Array.from(element.childNodes)
-      .map(renderInlineMarkdown)
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return content ? `${content}\n\n` : "";
-  }
-
-  if (tag === "pre") {
-    const content = (element.textContent ?? "").trim();
-    return content ? `\`\`\`\n${content}\n\`\`\`\n\n` : "";
-  }
-
-  if (tag === "blockquote") {
-    const content = Array.from(element.childNodes)
-      .map((child) => renderBlockMarkdown(child, depth))
-      .join("")
-      .trim();
-    if (!content) return "";
-    return `${content
-      .split("\n")
-      .map((line) => (line ? `> ${line}` : ">"))
-      .join("\n")}\n\n`;
-  }
-
-  if (tag === "ul" || tag === "ol") {
-    const items = Array.from(element.children)
-      .filter((child) => child.tagName.toLowerCase() === "li")
-      .map((child, index) => {
-        const prefix = tag === "ol" ? `${index + 1}. ` : "- ";
-        const content = Array.from(child.childNodes)
-          .map((grandchild) => {
-            const childTag =
-              grandchild.nodeType === 1
-                ? (grandchild as Element).tagName.toLowerCase()
-                : "";
-            return childTag === "ul" || childTag === "ol"
-              ? `\n${renderBlockMarkdown(grandchild, depth + 1)}`
-              : renderInlineMarkdown(grandchild);
-          })
-          .join(" ")
-          .replace(/\s+\n/g, "\n")
-          .replace(/\n\s+/g, "\n")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (!content) return "";
-        const indented = content
-          .split("\n")
-          .map((line, lineIndex) =>
-            lineIndex === 0
-              ? `${"  ".repeat(depth)}${prefix}${line}`
-              : `${"  ".repeat(depth + 1)}${line}`,
-          )
-          .join("\n");
-        return indented;
-      })
-      .filter(Boolean)
-      .join("\n");
-    return items ? `${items}\n\n` : "";
-  }
-
-  if (tag === "hr") {
-    return "---\n\n";
-  }
-
-  const blockContent = Array.from(element.childNodes)
-    .map((child) => renderBlockMarkdown(child, depth))
-    .join("");
-
-  if (blockContent.trim()) {
-    return blockContent;
-  }
-
-  const inlineContent = Array.from(element.childNodes)
-    .map(renderInlineMarkdown)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return inlineContent ? `${inlineContent}\n\n` : "";
-}
-
-function extractDomMarkdownFallback(document: Document): string {
-  const root = document.body ?? document.documentElement;
-  if (!root) return "";
-
-  return Array.from(root.childNodes)
-    .map((node) => renderBlockMarkdown(node))
-    .join("")
-    .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 type WreqLikeRequestEvent = {
@@ -655,6 +447,125 @@ function parseContentLengthHeader(value: string | null): number | undefined {
   if (!value) return undefined;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function resolveMaxResponseBytes(
+  opts: FetchOptions,
+  format: OutputFormat,
+): number | undefined {
+  const value = opts.maxResponseBytes;
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return Math.max(1, Math.floor(value));
+  }
+  // Like maxChars, raw output is only limited when the caller asks for it.
+  return format === "raw" ? undefined : DEFAULT_MAX_RESPONSE_BYTES;
+}
+
+type TextBody = {
+  text: string;
+  bytesRead: number;
+  /** The body continued past the limit; `text` holds only what was read. */
+  truncated: boolean;
+};
+
+/**
+ * Reads a text body as UTF-8 (as wreq-js's Response.text() does), stopping at
+ * `maxBytes` and cancelling the rest of the stream.
+ */
+async function readTextBody(
+  response: FetchResponseLike,
+  maxBytes: number | undefined,
+): Promise<TextBody> {
+  if (!response.body) {
+    // Without a stream the body can only be cut after it has been read.
+    const text = await response.text();
+    const bytes = new TextEncoder().encode(text);
+    if (maxBytes === undefined || bytes.byteLength <= maxBytes) {
+      return { text, bytesRead: bytes.byteLength, truncated: false };
+    }
+    return {
+      text: new TextDecoder().decode(bytes.subarray(0, maxBytes), {
+        stream: true,
+      }),
+      bytesRead: maxBytes,
+      truncated: true,
+    };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const parts: string[] = [];
+  let bytesRead = 0;
+  let truncated = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        parts.push(decoder.decode());
+        break;
+      }
+      if (!value) continue;
+      if (maxBytes !== undefined && bytesRead + value.byteLength > maxBytes) {
+        const kept = value.subarray(0, maxBytes - bytesRead);
+        // Keep stream mode so a multi-byte character split by the cut is
+        // dropped rather than decoded as U+FFFD.
+        parts.push(decoder.decode(kept, { stream: true }));
+        bytesRead += kept.byteLength;
+        truncated = true;
+        break;
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+      bytesRead += value.byteLength;
+    }
+  } finally {
+    if (truncated) {
+      await reader.cancel("maxResponseBytes exceeded").catch(() => {});
+    }
+    reader.releaseLock();
+  }
+  return { text: parts.join(""), bytesRead, truncated };
+}
+
+async function discardBody(response: FetchResponseLike): Promise<void> {
+  if (!response.body) return;
+  const reader = response.body.getReader();
+  await reader.cancel("maxResponseBytes exceeded").catch(() => {});
+  reader.releaseLock();
+}
+
+function describeTruncation(
+  body: TextBody,
+  declaredLength: number | undefined,
+): { responseTruncated?: ResponseTruncation } {
+  if (!body.truncated) return {};
+  return {
+    responseTruncated:
+      declaredLength !== undefined && declaredLength > body.bytesRead
+        ? { bytesRead: body.bytesRead, contentLength: declaredLength }
+        : { bytesRead: body.bytesRead },
+  };
+}
+
+function buildResponseTooLargeError(
+  context: FetchErrorContext,
+  maxResponseBytes: number,
+  downloadedBytes: number | undefined,
+): FetchError {
+  const targetUrl = context.finalUrl ?? context.url;
+  return {
+    error: `Response body from ${targetUrl} exceeds maxResponseBytes (${formatByteCount(maxResponseBytes)}); a truncated JSON document cannot be parsed.`,
+    code: "response_too_large",
+    phase: "loading",
+    retryable: false,
+    url: context.url,
+    finalUrl: context.finalUrl,
+    statusCode: context.statusCode,
+    statusText: context.statusText,
+    mimeType: context.mimeType,
+    contentLength: context.contentLength,
+    downloadedBytes,
+    maxResponseBytes,
+  };
 }
 
 function isTimeoutError(error: unknown): boolean {
@@ -919,6 +830,12 @@ function isJsonResponse(contentType: string, body: string): boolean {
   return isJsonContentType(contentType) || isLikelyJsonBody(body);
 }
 
+function reportsOembed404(consoleErrors: string[][]): boolean {
+  return consoleErrors.some((args) =>
+    args.some((arg) => arg.includes("oEmbed request failed: 404")),
+  );
+}
+
 function decodeHtmlAttribute(value: string): string {
   return value
     .replace(/&amp;/gi, "&")
@@ -926,50 +843,6 @@ function decodeHtmlAttribute(value: string): string {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">");
-}
-
-function extractQualifiedAlternateLinks(
-  document: Document,
-  baseUrl: string,
-  format: OutputFormat,
-): string[] {
-  const acceptedTypes: Record<OutputFormat, string[]> = {
-    markdown: ["text/markdown", "text/x-markdown"],
-    text: ["text/plain", "text/markdown", "text/x-markdown"],
-    html: ["text/html", "application/xhtml+xml"],
-    json: ["application/json", "text/json"],
-    raw: [],
-  };
-  const accepted = acceptedTypes[format];
-  const head = document.head;
-  if (!head) return [];
-
-  const links = Array.from(head.querySelectorAll("link"));
-  const candidates: string[] = [];
-  for (const link of links) {
-    const rel = (link.getAttribute("rel") ?? "").toLowerCase().split(/\s+/);
-    if (!rel.includes("alternate")) continue;
-
-    const type = normalizeContentType(link.getAttribute("type") ?? "");
-    const isAccepted =
-      accepted.some((value) => type === value) ||
-      (format === "json" && type.endsWith("+json"));
-    if (!isAccepted) continue;
-
-    const href = link.getAttribute("href");
-    if (!href) continue;
-
-    try {
-      const target = new URL(href, baseUrl).toString();
-      if (target !== baseUrl && !candidates.includes(target)) {
-        candidates.push(target);
-      }
-    } catch {
-      // Ignore malformed alternate links.
-    }
-  }
-
-  return candidates;
 }
 
 function extractClientSideRedirect(
@@ -1131,6 +1004,14 @@ export function getLatestChromeProfile(): string {
 export function createDefuddleFetch(
   dependencies: FetchDependencies = runtimeDependencies,
 ) {
+  const analyze = (
+    request: HtmlAnalysisRequest,
+    timeoutMs: number,
+  ): Promise<HtmlAnalysis> =>
+    dependencies.analyzeHtml
+      ? dependencies.analyzeHtml(request, { timeoutMs })
+      : analyzeHtml(request, dependencies.defuddle);
+
   async function fetchWithClientRedirects(
     opts: FetchOptions,
     hooks: FetchExecutionHooks,
@@ -1189,6 +1070,20 @@ export function createDefuddleFetch(
       phase: "connecting",
       timeoutMs,
     };
+    // Set once the text body has been read or abandoned. The native client can
+    // still report read-ahead progress after that; it must not move the phase
+    // back to "loading" while the page is processed.
+    let bodyConsumed = false;
+
+    // Parsing and extraction count as processing, so a timeout or crash there
+    // is reported as such.
+    const runAnalysis = async (request: HtmlAnalysisRequest) => {
+      const previousPhase = errorContext.phase;
+      errorContext.phase = "processing";
+      const analysis = await analyze(request, timeoutMs);
+      errorContext.phase = previousPhase;
+      return analysis;
+    };
 
     try {
       emitProgress(hooks, {
@@ -1197,6 +1092,9 @@ export function createDefuddleFetch(
         phase: "fetch_start",
       });
       fetchOptions.onRequestEvent = (event: WreqLikeRequestEvent) => {
+        if (bodyConsumed) {
+          return;
+        }
         if (event.url) {
           errorContext.finalUrl = event.url;
         }
@@ -1286,7 +1184,25 @@ export function createDefuddleFetch(
       }
 
       errorContext.phase = "loading";
-      const rawBody = await response.text();
+      const maxResponseBytes = resolveMaxResponseBytes(opts, format);
+      if (
+        maxResponseBytes !== undefined &&
+        format !== "raw" &&
+        isJsonContentType(contentType) &&
+        (errorContext.contentLength ?? 0) > maxResponseBytes
+      ) {
+        // A JSON prefix cannot be parsed, so skip the download entirely.
+        bodyConsumed = true;
+        await discardBody(response);
+        return buildResponseTooLargeError(
+          errorContext,
+          maxResponseBytes,
+          undefined,
+        );
+      }
+      const body = await readTextBody(response, maxResponseBytes);
+      bodyConsumed = true;
+      const rawBody = body.text;
       const clientSideRedirect = extractClientSideRedirect(rawBody, finalUrl);
       if (clientSideRedirect) {
         if (clientSideRedirectCount >= MAX_CLIENT_SIDE_REDIRECTS) {
@@ -1321,41 +1237,26 @@ export function createDefuddleFetch(
           opts.url,
         );
         if (isXUrl) {
-          let extractedContent: string | undefined;
-          const suppressedErrors: unknown[][] = [];
-          const origConsoleError = console.error;
-          console.error = (...args: unknown[]) => {
-            suppressedErrors.push(args);
-          };
-          try {
-            const extractionDocument = parseLinkedomHTML(rawBody, finalUrl);
-            const extracted = await dependencies.defuddle(
-              extractionDocument,
-              finalUrl,
-              {
-                markdown: true,
-                removeImages,
-                includeReplies,
-              },
-            );
-            extractedContent = extracted.content;
-          } finally {
-            console.error = origConsoleError;
+          const analysis = await runAnalysis({
+            html: rawBody,
+            url: finalUrl,
+            requestUrl: opts.url,
+            format,
+            extract: { markdown: true, removeImages, includeReplies },
+          });
+          if (analysis.extraction?.error !== undefined) {
+            errorContext.phase = "processing";
+            throw new Error(analysis.extraction.error);
           }
-
-          const hasOembed404 = suppressedErrors.some((args) =>
-            args.some(
-              (arg) =>
-                typeof arg === "string" &&
-                arg.includes("oEmbed request failed: 404"),
-            ),
-          );
-          const hasJsDisabledShell = isTwitterJsDisabledPage(
-            parseLinkedomHTML(rawBody, finalUrl),
-            opts.url,
+          const extractedContent = analysis.extraction?.extracted.content;
+          const hasOembed404 = reportsOembed404(
+            analysis.extraction?.consoleErrors ?? [],
           );
           // Only return 404 when a signal fires AND defuddle found no content
-          if ((hasOembed404 || hasJsDisabledShell) && !extractedContent) {
+          if (
+            (hasOembed404 || analysis.isXJsDisabledShell) &&
+            !extractedContent
+          ) {
             return {
               error: `Server returned HTTP 404 Not Found for ${opts.url}.`,
               code: "http_error",
@@ -1392,6 +1293,7 @@ export function createDefuddleFetch(
           browser,
           os,
           contentType: normalizeContentType(contentType) || undefined,
+          ...describeTruncation(body, errorContext.contentLength),
         };
 
         emitStatus(hooks, "done");
@@ -1406,11 +1308,12 @@ export function createDefuddleFetch(
       if (format === "json") {
         if (!jsonResponse) {
           if (HTML_CONTENT_TYPES.some((value) => contentType.includes(value))) {
-            const alternateLinks = extractQualifiedAlternateLinks(
-              parseLinkedomHTML(rawBody, finalUrl),
-              finalUrl,
+            const { alternateLinks } = await runAnalysis({
+              html: rawBody,
+              url: finalUrl,
+              requestUrl: opts.url,
               format,
-            );
+            });
             if (
               alternateLinks.length > 0 &&
               alternateLinkFallbackCount < MAX_ALTERNATE_LINK_FALLBACKS
@@ -1437,6 +1340,14 @@ export function createDefuddleFetch(
           };
         }
 
+        if (body.truncated && maxResponseBytes !== undefined) {
+          return buildResponseTooLargeError(
+            errorContext,
+            maxResponseBytes,
+            body.bytesRead,
+          );
+        }
+
         const result = buildJsonResult(
           opts,
           finalUrl,
@@ -1458,6 +1369,14 @@ export function createDefuddleFetch(
       }
 
       if (jsonResponse) {
+        if (body.truncated && maxResponseBytes !== undefined) {
+          return buildResponseTooLargeError(
+            errorContext,
+            maxResponseBytes,
+            body.bytesRead,
+          );
+        }
+
         const result = buildJsonResult(
           opts,
           finalUrl,
@@ -1494,7 +1413,10 @@ export function createDefuddleFetch(
           progress: 1,
           phase: "plain_text_done",
         });
-        return result;
+        return {
+          ...result,
+          ...describeTruncation(body, errorContext.contentLength),
+        };
       }
 
       if (!HTML_CONTENT_TYPES.some((value) => contentType.includes(value))) {
@@ -1518,13 +1440,20 @@ export function createDefuddleFetch(
         progress: 0.96,
         phase: "extracting",
       });
-      const fallbackDocument = parseLinkedomHTML(rawBody, finalUrl);
-      const extractionDocument = parseLinkedomHTML(rawBody, finalUrl);
-      const alternateLinks = extractQualifiedAlternateLinks(
-        fallbackDocument,
-        finalUrl,
+      const analysis = await runAnalysis({
+        html: rawBody,
+        url: finalUrl,
+        requestUrl: opts.url,
         format,
-      );
+        extract: { markdown: format !== "html", removeImages, includeReplies },
+        fallback: format === "markdown" ? "markdown" : "text",
+      });
+      const { alternateLinks } = analysis;
+      const extraction = analysis.extraction ?? {
+        extracted: { content: undefined, wordCount: 0 },
+        consoleErrors: [],
+      };
+      const extracted = extraction.extracted;
 
       const tryAlternateLinkFallback = async () => {
         if (
@@ -1542,37 +1471,6 @@ export function createDefuddleFetch(
         );
       };
 
-      let extracted: Awaited<ReturnType<typeof dependencies.defuddle>>;
-      const suppressedErrors: unknown[][] = [];
-      try {
-        // Defuddle's async extractors (e.g. X oEmbed) can throw on 404 and
-        // log a noisy "Error in async extraction" via console.error. Suppress
-        // that spam by intercepting console.error during the defuddle call.
-        // We also capture the suppressed errors for later analysis.
-        const origConsoleError = console.error;
-        console.error = (...args: unknown[]) => {
-          suppressedErrors.push(args);
-        };
-        try {
-          extracted = await dependencies.defuddle(
-            extractionDocument,
-            finalUrl,
-            {
-              markdown: format !== "html",
-              removeImages,
-              includeReplies,
-            },
-          );
-        } finally {
-          console.error = origConsoleError;
-        }
-      } catch (_error) {
-        extracted = {
-          content: undefined,
-          wordCount: 0,
-        } as Awaited<ReturnType<typeof dependencies.defuddle>>;
-      }
-
       // Detect X/Twitter deleted/protected tweets using two signals:
       // 1. Defuddle's oEmbed extractor failed with a 404 (captured from
       //    suppressed console.error)
@@ -1583,18 +1481,11 @@ export function createDefuddleFetch(
         opts.url,
       );
       if (isXUrl) {
-        const hasOembed404 = suppressedErrors.some((args) =>
-          args.some(
-            (arg) =>
-              typeof arg === "string" &&
-              arg.includes("oEmbed request failed: 404"),
-          ),
-        );
-        const hasJsDisabledShell = isTwitterJsDisabledPage(
-          fallbackDocument,
-          opts.url,
-        );
-        if ((hasOembed404 || hasJsDisabledShell) && !extracted.content) {
+        const hasOembed404 = reportsOembed404(extraction.consoleErrors);
+        if (
+          (hasOembed404 || analysis.isXJsDisabledShell) &&
+          !extracted.content
+        ) {
           return {
             error: `Server returned HTTP 404 Not Found for ${opts.url}.`,
             code: "http_error",
@@ -1615,13 +1506,16 @@ export function createDefuddleFetch(
       let wordCount = extracted.wordCount;
 
       if (!extractedContent || wordCount === 0) {
-        const fallbackText = extractDomTextFallback(fallbackDocument);
+        const fallbackText = extraction.fallback?.text ?? "";
         if (!fallbackText) {
           const alternateResult = await tryAlternateLinkFallback();
           if (alternateResult) return alternateResult;
 
+          const truncationHint = body.truncated
+            ? ` Only the first ${formatByteCount(body.bytesRead)} of the response body was read; raise maxResponseBytes to read more.`
+            : "";
           return {
-            error: `No content extracted from ${opts.url}. May need JS rendering or is blocked.`,
+            error: `No content extracted from ${opts.url}. May need JS rendering or is blocked.${truncationHint}`,
             code: "no_content",
             phase: "processing",
             retryable: false,
@@ -1637,7 +1531,7 @@ export function createDefuddleFetch(
           format === "html"
             ? rawBody
             : format === "markdown"
-              ? extractDomMarkdownFallback(fallbackDocument) || fallbackText
+              ? extraction.fallback?.markdown || fallbackText
               : fallbackText;
         wordCount = estimateWordCount(fallbackText);
       }
@@ -1688,6 +1582,7 @@ export function createDefuddleFetch(
         content: truncateContent(normalizedContent, maxChars),
         browser,
         os,
+        ...describeTruncation(body, errorContext.contentLength),
       };
 
       emitStatus(hooks, "done");

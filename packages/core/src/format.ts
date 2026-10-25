@@ -101,6 +101,18 @@ function suggestRetryTimeoutMs(error: FetchError): number | undefined {
   return roundSuggestedTimeoutMs(error.timeoutMs * 2);
 }
 
+function suggestMaxResponseBytes(error: FetchError): number | undefined {
+  const needed =
+    error.contentLength ??
+    (error.maxResponseBytes ? error.maxResponseBytes * 2 : undefined);
+  if (!needed) {
+    return undefined;
+  }
+
+  const mebibyte = 1024 * 1024;
+  return Math.ceil(needed / mebibyte) * mebibyte;
+}
+
 export function buildUserFacingFetchErrorSummary(error: FetchError): string {
   if (error.code === "http_error" && error.statusCode) {
     return `Server responded with ${error.statusCode}${error.statusText ? ` ${error.statusText}` : ""}`;
@@ -134,6 +146,8 @@ export function buildUserFacingFetchErrorSummary(error: FetchError): string {
       return "No readable content could be extracted from the page.";
     case "processing_error":
       return "The response could not be processed.";
+    case "response_too_large":
+      return "The response is larger than the maxResponseBytes limit.";
     case "network_error": {
       if (/dns error/i.test(error.error)) {
         return "DNS error — could not resolve the hostname.";
@@ -161,7 +175,8 @@ export function buildFetchErrorResponseText(error: FetchError): string {
   if (
     error.code === "timeout" ||
     error.code === "http_error" ||
-    error.code === "download_error"
+    error.code === "download_error" ||
+    error.code === "response_too_large"
   ) {
     const metadata = buildHeader([
       ["URL", error.url],
@@ -191,8 +206,20 @@ export function buildFetchErrorResponseText(error: FetchError): string {
           : undefined,
       ],
       [
+        "maxResponseBytes",
+        error.maxResponseBytes !== undefined
+          ? `${error.maxResponseBytes} bytes (${formatByteCount(error.maxResponseBytes)})`
+          : undefined,
+      ],
+      [
         "Suggested timeoutMs",
         error.code === "timeout" ? suggestRetryTimeoutMs(error) : undefined,
+      ],
+      [
+        "Suggested maxResponseBytes",
+        error.code === "response_too_large"
+          ? suggestMaxResponseBytes(error)
+          : undefined,
       ],
     ]);
 
@@ -206,6 +233,11 @@ export function buildFetchErrorResponseText(error: FetchError): string {
       "",
       "The timeoutMs parameter is configurable. Retry this call with a higher timeoutMs value.",
     );
+    if (error.phase === "processing") {
+      lines.push(
+        "Content extraction can be slow on very large or complex pages; a smaller maxResponseBytes makes it process less of the page.",
+      );
+    }
   } else if (error.code === "http_error") {
     if (error.statusCode === 429) {
       lines.push(
@@ -227,6 +259,11 @@ export function buildFetchErrorResponseText(error: FetchError): string {
     lines.push(
       "",
       "The download failed before completion. Retrying may help, especially if the connection was interrupted.",
+    );
+  } else if (error.code === "response_too_large") {
+    lines.push(
+      "",
+      "The maxResponseBytes parameter is configurable. Retry this call with a higher maxResponseBytes value.",
     );
   } else if (error.retryable) {
     lines.push("", "Retrying this request may help.");
@@ -252,6 +289,19 @@ export function truncateContent(content: string, maxChars: number): string {
   return `${content.slice(0, maxChars)}\n\n[... truncated]`;
 }
 
+export function describeResponseTruncation(
+  result: FetchResult,
+): string | undefined {
+  const truncation =
+    result.kind === "content" ? result.responseTruncated : undefined;
+  if (!truncation) return undefined;
+  const total =
+    truncation.contentLength !== undefined
+      ? ` of ${formatByteCount(truncation.contentLength)}`
+      : "";
+  return `read the first ${formatByteCount(truncation.bytesRead)}${total} of the response body; raise maxResponseBytes to read more`;
+}
+
 export function buildCompactMetadataHeader(result: FetchResult): string {
   if (isFileFetchResult(result)) {
     return buildHeader([
@@ -268,6 +318,7 @@ export function buildCompactMetadataHeader(result: FetchResult): string {
     ["Author", result.author],
     ["Published", result.published],
     ["Content-Type", result.contentType],
+    ["Truncated", describeResponseTruncation(result)],
   ]);
 }
 
@@ -288,6 +339,7 @@ export function buildMetadataHeader(result: FetchResult): string {
     ["Author", result.author],
     ["Published", result.published],
     ["Content-Type", result.contentType],
+    ["Truncated", describeResponseTruncation(result)],
     ["Site", result.site],
     ["Language", result.language],
     ["Words", result.wordCount],

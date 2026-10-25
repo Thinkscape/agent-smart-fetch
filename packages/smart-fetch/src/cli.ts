@@ -30,6 +30,7 @@ import type {
 import {
   buildFetchResponseText,
   defuddleFetch,
+  describeResponseTruncation,
   executeBatchFetchToolCall,
   isError,
   isFileFetchResult,
@@ -78,7 +79,14 @@ OPTIONS
   --max-chars <n>        Maximum characters to return
                          Default: 50000
 
-  --timeout <ms>         Request timeout in milliseconds
+  --max-response-bytes <n>
+                         Maximum bytes of a text response to read; longer
+                         pages are cut before extraction
+                         Default: 1048576; a single --raw fetch reads
+                         everything
+
+  --timeout <ms>         Timeout in milliseconds for the request, and again
+                         for content extraction
                          Default: 15000
 
   --remove-images        Strip image references from output
@@ -118,6 +126,7 @@ interface CliOptions {
   os?: string;
   format?: "markdown" | "html" | "text" | "json" | "raw";
   maxChars?: number;
+  maxResponseBytes?: number;
   timeout?: number;
   removeImages: boolean;
   includeReplies?: "true" | "false" | "extractors";
@@ -217,6 +226,9 @@ function parseCliArgs(rawArgs: string[]): CliOptions {
     os: options.os as string | undefined,
     format,
     maxChars: options["max-chars"] ? Number(options["max-chars"]) : undefined,
+    maxResponseBytes: options["max-response-bytes"]
+      ? Number(options["max-response-bytes"])
+      : undefined,
     timeout: options.timeout ? Number(options.timeout) : undefined,
     removeImages: options["remove-images"] === true,
     includeReplies,
@@ -269,6 +281,7 @@ function resolveFetchToolConfig(cliOpts: CliOptions): FetchToolConfig {
     browser: cliOpts.browser,
     os: cliOpts.os,
     maxChars: cliOpts.maxChars,
+    maxResponseBytes: cliOpts.maxResponseBytes,
     timeoutMs: cliOpts.timeout,
     removeImages: cliOpts.removeImages || undefined,
     includeReplies: cliOpts.includeReplies
@@ -291,6 +304,10 @@ function buildMetadataForPipe(result: FetchResult): string {
     lines.push(`> Content-Type: ${result.contentType}`);
   }
   lines.push(`> URL: ${result.finalUrl}`);
+  const truncation = describeResponseTruncation(result);
+  if (truncation) {
+    lines.push(`> Truncated: ${truncation}`);
+  }
   return lines.join("\n");
 }
 
@@ -379,6 +396,7 @@ async function runFetch(opts: CliOptions): Promise<void> {
     os: defaults.os,
     format: opts.format ?? "markdown",
     maxChars: effectiveMaxChars,
+    maxResponseBytes: opts.maxResponseBytes,
     timeoutMs: defaults.timeoutMs,
     removeImages: defaults.removeImages || opts.removeImages,
     includeReplies: defaults.includeReplies,

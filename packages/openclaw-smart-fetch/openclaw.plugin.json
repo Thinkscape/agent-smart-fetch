@@ -17,9 +17,14 @@
         "description": "Maximum characters to return (default: 50000)",
         "default": 50000
       },
+      "maxResponseBytes": {
+        "type": "number",
+        "description": "Maximum bytes of a text response to read; longer pages are cut before extraction (default: 1048576)",
+        "default": 1048576
+      },
       "timeoutMs": {
         "type": "number",
-        "description": "Fetch timeout in milliseconds (default: 15000)",
+        "description": "Timeout in milliseconds for the request, and again for content extraction (default: 15000)",
         "default": 15000
       },
       "browser": {

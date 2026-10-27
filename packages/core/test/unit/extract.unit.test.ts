@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
+import { runtimeDependencies } from "../../src/dependencies";
 import {
   createDefuddleFetch,
   getLatestChromeProfile,
@@ -230,6 +231,78 @@ describe("createDefuddleFetch", () => {
     if (!isError(result)) {
       expect(result.finalUrl).toBe("https://example.com/data/page.md");
       expect(result.content).toContain("# Alternate content");
+    }
+  });
+
+  it("prefers a matching alternate over boilerplate DOM text when defuddle extracts nothing", async () => {
+    const shellBoilerplate = Array.from(
+      { length: 12 },
+      (_, index) =>
+        `<li><a href="/nav/${index}">Navigation section ${index} account menu link</a></li>`,
+    ).join("");
+    const fetch = mock(async (url: string) => {
+      if (url === "https://example.com/docs/page") {
+        return createResponse({
+          url,
+          body: `<html><head><title>Docs shell</title><link rel="alternate" type="text/markdown" href="/docs/page.md"></head><body><nav><ul>${shellBoilerplate}</ul></nav><template><p>Sign in to your account to save preferences and continue.</p></template><noscript><p>This page requires JavaScript. Please turn on JavaScript in your browser and refresh the page to view its content.</p></noscript></body></html>`,
+        });
+      }
+
+      return createResponse({
+        url,
+        contentType: "text/markdown; charset=utf-8",
+        body: "# Persisting widgets\n\nStore completed widget transactions durably so the app can restore them after relaunch.",
+      });
+    });
+    const dependencies = createDependencies({
+      fetch,
+      defuddle: runtimeDependencies.defuddle,
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/docs/page",
+      format: "markdown",
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.finalUrl).toBe("https://example.com/docs/page.md");
+      expect(result.content).toContain("# Persisting widgets");
+      expect(result.content).toContain("restore them after relaunch");
+      expect(result.content).not.toContain("requires JavaScript");
+      expect(result.content).not.toContain("Navigation section");
+    }
+  });
+
+  it("keeps substantial defuddle extractions instead of following alternate links", async () => {
+    const article = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `Paragraph ${index} explains the primary article topic in readable detail.`,
+    ).join("\n\n");
+    const fetch = mock(async (url: string) =>
+      createResponse({
+        url,
+        body: `<html><head><link rel="alternate" type="text/markdown" href="/docs/page.md"></head><body><article><h1>Primary article</h1><p>${article}</p></article></body></html>`,
+      }),
+    );
+    const dependencies = createDependencies({
+      fetch,
+      defuddle: runtimeDependencies.defuddle,
+    });
+    const defuddleFetch = createDefuddleFetch(dependencies);
+
+    const result = await defuddleFetch({
+      url: "https://example.com/docs/page",
+      format: "markdown",
+    });
+
+    expect(isError(result)).toBe(false);
+    if (!isError(result)) {
+      expect(result.finalUrl).toBe("https://example.com/docs/page");
+      expect(result.content).toContain("Paragraph 0 explains");
+      expect(result.content).toContain("Paragraph 7 explains");
     }
   });
 

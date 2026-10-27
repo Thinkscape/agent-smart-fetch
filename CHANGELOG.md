@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.20 - 2026-10-27
+
+- **patch**: chore(deps): update actions/checkout action to v7 (#24)
+
 ## v0.3.19 - 2026-10-27
 
 - **patch**: chore(deps): update dependency brace-expansion to ^5.0.12 (#21)

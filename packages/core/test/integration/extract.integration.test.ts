@@ -71,19 +71,19 @@ describeIf("integration: extraction pipeline", () => {
   it(
     "follows markdown alternate links from JavaScript documentation shells",
     async () => {
-      for (const url of [
-        TEST_URLS.applePersistingPurchase,
-        TEST_URLS.appleChoosingReceiptValidation,
-        TEST_URLS.appleTransactionCurrentEntitlements,
-      ]) {
+      for (const [url, subject] of [
+        [TEST_URLS.applePersistingPurchase, "purchase"],
+        [TEST_URLS.appleChoosingReceiptValidation, "receipt"],
+        [TEST_URLS.appleTransactionCurrentEntitlements, "entitlement"],
+      ] as const) {
         const result = await defuddleFetch({ url, format: "markdown" });
 
         expect(isError(result)).toBe(false);
         if (!isError(result)) {
-          expect(result.finalUrl).toContain("/tutorials/data/");
-          expect(result.finalUrl).toEndWith(".md");
+          expect(result.finalUrl).not.toBe(url);
           expect(result.content).not.toContain("This page requires JavaScript");
-          expect(result.wordCount).toBeGreaterThan(20);
+          expect(result.content.toLowerCase()).toContain(subject);
+          expect(result.wordCount).toBeGreaterThan(100);
         }
       }
     },

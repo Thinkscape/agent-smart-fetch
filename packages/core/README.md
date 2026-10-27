@@ -13,7 +13,7 @@ The core now covers both:
 - batch fetch execution over an array of single-item requests
 - attachment/binary detection and temp-file streaming
 - bounded client-side `<meta http-equiv="refresh">` redirect handling
-- bounded alternate-content fallback via qualified `<link rel="alternate" type="...">` tags in `<head>`, selected according to the requested output format
+- bounded alternate-content fallback via qualified `<link rel="alternate" type="...">` tags in `<head>` when article extraction is empty or thin, selected according to the requested output format
 
 Batch behavior in the core:
 - each item uses the same parameter surface as the single-fetch tool

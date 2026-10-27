@@ -1615,11 +1615,14 @@ export function createDefuddleFetch(
       let wordCount = extracted.wordCount;
 
       if (!extractedContent || wordCount === 0) {
+        // Defuddle found no article content. A matching declared alternate is
+        // a better source than raw DOM text, which on JS-rendered shells is
+        // mostly navigation, account templates, and noscript warnings.
+        const alternateResult = await tryAlternateLinkFallback();
+        if (alternateResult) return alternateResult;
+
         const fallbackText = extractDomTextFallback(fallbackDocument);
         if (!fallbackText) {
-          const alternateResult = await tryAlternateLinkFallback();
-          if (alternateResult) return alternateResult;
-
           return {
             error: `No content extracted from ${opts.url}. May need JS rendering or is blocked.`,
             code: "no_content",

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.20 - 2026-10-27
+
+- **patch**: chore(deps): update actions/checkout action to v7 (#24)
+
+## v0.3.19 - 2026-10-27
+
+- **patch**: chore(deps): update dependency brace-expansion to ^5.0.12 (#21)
+
+## v0.3.18 - 2026-10-27
+
+- **patch**: Declare pi host-provided packages as peer dependencies, and prefer matching alternate documents over JavaScript shell boilerplate when extraction is empty.
+
 ## v0.3.17 - 2026-07-29
 
 - **patch**: chore(deps): update dependency node (#19)

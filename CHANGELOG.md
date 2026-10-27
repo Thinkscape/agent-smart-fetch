@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.18 - 2026-10-27
+
+- **patch**: Declare pi host-provided packages as peer dependencies, and prefer matching alternate documents over JavaScript shell boilerplate when extraction is empty.
+
 ## v0.3.17 - 2026-07-29
 
 - **patch**: chore(deps): update dependency node (#19)

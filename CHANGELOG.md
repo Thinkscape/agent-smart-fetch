@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.23 - 2026-10-28
+
+- **patch**: Keep pi tool-result details compact without duplicating fetched content, while preserving rendering for older sessions.
+
 ## v0.3.22 - 2026-10-28
 
 - **patch**: chore(deps): update dev dependencies (#23)

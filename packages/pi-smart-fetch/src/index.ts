@@ -1,10 +1,8 @@
 import {
   type ExtensionAPI,
   getAgentDir,
-  getMarkdownTheme,
-  keyText,
 } from "@earendil-works/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "@sinclair/typebox";
 import {
   type BatchFetchItemProgress,
@@ -19,6 +17,7 @@ import {
   executeBatchFetchToolCall,
   executeFetchToolCall,
   type FetchResult,
+  type FetchToolDefaults,
   isError,
   isFileFetchResult,
   type OutputFormat,
@@ -49,7 +48,7 @@ type WebFetchRenderDetails = {
   verbose?: boolean;
   format?: OutputFormat;
   maxChars?: number;
-  fetchResult?: FetchResult;
+  fetchSummary?: WebFetchResultSummary;
   started?: boolean;
   status?:
     | "connecting"
@@ -62,17 +61,213 @@ type WebFetchRenderDetails = {
   phase?: string;
   url?: string;
   spinnerTick?: number;
+  durationMs?: number;
+};
+
+/**
+ * Details as rehydrated from a persisted session. Sessions written before the
+ * compact `fetchSummary` existed stored the full `FetchResult` instead; it is
+ * only read to derive a summary for rendering and is never written anymore.
+ */
+type PersistedWebFetchRenderDetails = WebFetchRenderDetails & {
+  fetchResult?: FetchResult;
 };
 
 type BatchRenderDetails = {
   verbose?: boolean;
   batchProgress?: BatchFetchProgressSnapshot;
-  batchResult?: BatchFetchResult;
+  batchSummary?: BatchFetchResultSummary;
   started?: boolean;
   spinnerTick?: number;
 };
 
+/**
+ * Compact, persistable summary of a successful web_fetch result.
+ *
+ * pi persists tool result `details` into session files and rehydrates them on
+ * every session load/resume/fork. The extracted page content already travels
+ * in the tool's `content` payload (the agent's context), so embedding the full
+ * FetchResult in `details` would duplicate it unboundedly. These summaries
+ * keep only the metadata the TUI renderer and debugging need and
+ * deliberately omit page text.
+ */
+type WebFetchContentSummary = {
+  kind: "content";
+  url: string;
+  finalUrl: string;
+  ok: true;
+  charCount: number;
+  wordCount: number;
+  truncated: boolean;
+  title: string;
+  published: string;
+  contentType?: string;
+};
+
+type WebFetchFileSummary = {
+  kind: "file";
+  url: string;
+  finalUrl: string;
+  ok: true;
+  filePath: string;
+  fileSize: number;
+  mimeType?: string;
+};
+
+type WebFetchResultSummary = WebFetchContentSummary | WebFetchFileSummary;
+
+type BatchFetchItemSummary = {
+  index: number;
+  url: string;
+  finalUrl?: string;
+  ok: boolean;
+  status: "done" | "error";
+  error?: string;
+  charCount?: number;
+  wordCount?: number;
+  truncated?: boolean;
+  kind?: "content" | "file";
+  filePath?: string;
+  fileSize?: number;
+  mimeType?: string;
+};
+
+type BatchFetchResultSummary = {
+  total: number;
+  succeeded: number;
+  failed: number;
+  batchConcurrency: number;
+  durationMs: number;
+  items: BatchFetchItemSummary[];
+};
+
 const SPINNER_INTERVAL_MS = 100;
+
+/** Marker appended by core's truncateContent() when content exceeds maxChars. */
+const TRUNCATION_MARKER = "\n\n[... truncated]";
+
+function wasTruncatedAtMaxChars(content: string, maxChars: number): boolean {
+  return content.length > maxChars && content.endsWith(TRUNCATION_MARKER);
+}
+
+function buildFetchResultSummary(
+  result: FetchResult,
+  maxChars: number,
+): WebFetchResultSummary {
+  if (isFileFetchResult(result)) {
+    return {
+      kind: "file",
+      url: result.url,
+      finalUrl: result.finalUrl,
+      ok: true,
+      filePath: result.filePath,
+      fileSize: result.fileSize,
+      ...(result.mimeType ? { mimeType: result.mimeType } : {}),
+    };
+  }
+
+  return {
+    kind: "content",
+    url: result.url,
+    finalUrl: result.finalUrl,
+    ok: true,
+    charCount: result.content.length,
+    wordCount: result.wordCount,
+    truncated: wasTruncatedAtMaxChars(result.content, maxChars),
+    title: result.title,
+    published: result.published,
+    ...(result.contentType ? { contentType: result.contentType } : {}),
+  };
+}
+
+function resolveWebFetchSummary(
+  details: PersistedWebFetchRenderDetails,
+  defaultMaxChars: number,
+): WebFetchResultSummary | undefined {
+  if (details.fetchSummary) {
+    return details.fetchSummary;
+  }
+
+  const legacyResult = details.fetchResult;
+  if (!legacyResult) {
+    return undefined;
+  }
+  if (
+    !isFileFetchResult(legacyResult) &&
+    typeof legacyResult.content !== "string"
+  ) {
+    return undefined;
+  }
+
+  const summary = buildFetchResultSummary(
+    legacyResult,
+    details.maxChars ?? defaultMaxChars,
+  );
+  // Legacy sessions persisted the settings default as `details.maxChars`, not
+  // the call's actual limit, so a custom-limit truncation would be missed by
+  // the length check. Core's trailing marker is a best-effort heuristic here:
+  // page text that literally ends with the marker is also reported truncated.
+  if (summary.kind === "content" && !isFileFetchResult(legacyResult)) {
+    summary.truncated ||= legacyResult.content.endsWith(TRUNCATION_MARKER);
+  }
+  return summary;
+}
+
+function buildBatchResultSummary(
+  batchResult: BatchFetchResult,
+  defaults: FetchToolDefaults,
+  startedAt: number,
+): BatchFetchResultSummary {
+  return {
+    total: batchResult.total,
+    succeeded: batchResult.succeeded,
+    failed: batchResult.failed,
+    batchConcurrency: batchResult.batchConcurrency,
+    durationMs: Date.now() - startedAt,
+    items: batchResult.items.map((item) => {
+      const itemMaxChars = item.request.maxChars ?? defaults.maxChars;
+      const summary: BatchFetchItemSummary = {
+        index: item.index,
+        url: item.request.url,
+        ok: item.status === "done",
+        status: item.status,
+      };
+
+      if (item.status === "error") {
+        summary.error = item.error ?? "Unknown error";
+        return summary;
+      }
+
+      const result = item.result;
+      if (!result) {
+        // A completed item always carries its result; guard only defends a
+        // rehydrated or malformed payload from breaking the renderer.
+        summary.ok = false;
+        summary.error = "No result was recorded for this item.";
+        return summary;
+      }
+
+      summary.finalUrl = result.finalUrl;
+      if (isFileFetchResult(result)) {
+        summary.kind = "file";
+        summary.filePath = result.filePath;
+        summary.fileSize = result.fileSize;
+        if (result.mimeType) {
+          summary.mimeType = result.mimeType;
+        }
+      } else {
+        summary.kind = "content";
+        summary.charCount = result.content.length;
+        summary.wordCount = result.wordCount;
+        summary.truncated = wasTruncatedAtMaxChars(
+          result.content,
+          itemMaxChars,
+        );
+      }
+      return summary;
+    }),
+  };
+}
 
 function truncateMiddle(value: string, width: number): string {
   if (width <= 0) return "";
@@ -236,19 +431,18 @@ function renderUserMetadataLine(
 }
 
 function buildWebFetchMetadataLines(
-  details: WebFetchRenderDetails,
+  summary: WebFetchResultSummary,
   theme: {
     fg(color: string, value: string): string;
   },
 ): string[] {
-  const fetchResult = details.fetchResult;
-  if (!fetchResult) {
+  if (summary.kind !== "content") {
     return [];
   }
 
   const metadata: Array<[label: string, value: string | number | undefined]> = [
-    ["Title", fetchResult.title],
-    ["Published", fetchResult.published],
+    ["Title", summary.title],
+    ["Published", summary.published],
   ];
 
   return metadata.flatMap(([label, value]) => {
@@ -260,70 +454,31 @@ function buildWebFetchMetadataLines(
   });
 }
 
-function shouldRenderHighlightedContent(format?: OutputFormat) {
-  return format === "markdown" || format === "json" || format === "html";
-}
-
-function buildHighlightedMarkdownContent(
-  content: string,
-  format: OutputFormat,
-): string {
-  if (format === "json") {
-    return `\`\`\`json\n${content}\n\`\`\``;
-  }
-
-  if (format === "html") {
-    return `\`\`\`html\n${content}\n\`\`\``;
-  }
-
-  return content;
-}
-
-function buildWebFetchCollapsedPreview(details: WebFetchRenderDetails): {
-  previewContent: string;
-  remainingLines: number;
-} {
-  const contentLines = (details.fetchResult?.content ?? "")
-    .split("\n")
-    .filter(
-      (line, index, lines) =>
-        line.length > 0 || index === 0 || index < lines.length - 1,
-    );
-  const maxPreviewLines = 7;
-  const previewLines = contentLines.slice(0, maxPreviewLines);
-
-  return {
-    previewContent: previewLines.join("\n"),
-    remainingLines: Math.max(0, contentLines.length - previewLines.length),
-  };
-}
-
 function createWebFetchResultComponent(
-  details: WebFetchRenderDetails,
-  expanded: boolean,
+  summary: WebFetchResultSummary | undefined,
+  format: OutputFormat | undefined,
   theme: {
     fg(color: string, value: string): string;
   },
 ) {
-  const fetchResult = details.fetchResult;
-  if (!fetchResult) {
+  if (!summary) {
     return new Text(theme.fg("muted", "No fetch result available."), 0, 0);
   }
 
-  const metadataLines = buildWebFetchMetadataLines(details, theme);
+  const metadataLines = buildWebFetchMetadataLines(summary, theme);
   const container = new Container();
 
   if (metadataLines.length > 0) {
     container.addChild(new Text(metadataLines.join("\n"), 0, 0));
   }
 
-  if (isFileFetchResult(fetchResult)) {
+  if (summary.kind === "file") {
     const fileLines = [
-      theme.fg("muted", `File size: ${fetchResult.fileSize}`),
-      ...(fetchResult.mimeType
-        ? [theme.fg("muted", `Mime type: ${fetchResult.mimeType}`)]
+      theme.fg("muted", `File size: ${summary.fileSize}`),
+      ...(summary.mimeType
+        ? [theme.fg("muted", `Mime type: ${summary.mimeType}`)]
         : []),
-      theme.fg("muted", `File path: ${fetchResult.filePath}`),
+      theme.fg("muted", `File path: ${summary.filePath}`),
     ];
 
     if (metadataLines.length > 0 && fileLines.length > 0) {
@@ -333,46 +488,29 @@ function createWebFetchResultComponent(
     return container;
   }
 
-  const { previewContent, remainingLines } =
-    buildWebFetchCollapsedPreview(details);
-  const content = expanded ? fetchResult.content : previewContent;
-  const format = details.format ?? "markdown";
+  // The extracted page text is available in the tool's `content` payload, but
+  // this renderer intentionally stays compact in both collapsed and expanded
+  // views and shows only fetch metadata and stats, never a content preview.
+  // Core does not count words for raw responses and reports a placeholder 0,
+  // so omit the word count there instead of claiming the page has no words.
+  const countText =
+    format === "raw"
+      ? `${summary.charCount} chars`
+      : `${summary.charCount} chars · ${summary.wordCount} words`;
+  const statsLines = [
+    theme.fg("muted", countText + (summary.truncated ? " · truncated" : "")),
+    theme.fg(
+      "dim",
+      summary.truncated
+        ? "Content was truncated to maxChars before delivery to the agent."
+        : "Full content was delivered to the agent.",
+    ),
+  ];
 
-  if (metadataLines.length > 0 && content) {
+  if (metadataLines.length > 0) {
     container.addChild(new Spacer(1));
   }
-
-  if (content) {
-    if (shouldRenderHighlightedContent(format)) {
-      container.addChild(
-        new Markdown(
-          buildHighlightedMarkdownContent(content, format),
-          0,
-          0,
-          getMarkdownTheme(),
-        ),
-      );
-    } else {
-      container.addChild(new Text(content, 0, 0));
-    }
-  }
-
-  if (!expanded && remainingLines > 0) {
-    const expandKey = keyText("app.tools.expand") || "Ctrl+O";
-    if (content) {
-      container.addChild(new Spacer(1));
-    }
-    container.addChild(
-      new Text(
-        theme.fg("muted", `... (${remainingLines} more lines, `) +
-          theme.fg("dim", expandKey) +
-          theme.fg("muted", " to expand)"),
-        0,
-        0,
-      ),
-    );
-  }
-
+  container.addChild(new Text(statsLines.join("\n"), 0, 0));
   return container;
 }
 
@@ -387,8 +525,8 @@ function renderSingleFetchProgressText(
   const status = details.status ?? "connecting";
   const url =
     details.url ??
-    details.fetchResult?.finalUrl ??
-    details.fetchResult?.url ??
+    details.fetchSummary?.finalUrl ??
+    details.fetchSummary?.url ??
     "";
   const item: BatchFetchItemProgress = {
     index: 0,
@@ -497,6 +635,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       const runtimeDefaults = resolveFetchToolDefaults(settings);
       const verbose =
         (params.verbose as boolean | undefined) ?? settings.verboseByDefault;
+      const startedAt = Date.now();
 
       let spinnerTick = 0;
       let spinnerTimer: ReturnType<typeof setInterval> | null = null;
@@ -577,9 +716,13 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
               phase: latestDetails.phase,
               url: latestDetails.url,
               spinnerTick,
+              durationMs: Date.now() - startedAt,
             } satisfies WebFetchRenderDetails,
           };
         }
+
+        const effectiveMaxChars =
+          (params.maxChars as number | undefined) ?? runtimeDefaults.maxChars;
 
         return {
           content: [
@@ -591,14 +734,15 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
           details: {
             verbose,
             format: latestDetails.format,
-            maxChars: runtimeDefaults.maxChars,
-            fetchResult: result,
+            maxChars: effectiveMaxChars,
+            fetchSummary: buildFetchResultSummary(result, effectiveMaxChars),
             started: true,
             status: "done",
             progress: 1,
             phase: "done",
             url: result.finalUrl || result.url,
             spinnerTick,
+            durationMs: Date.now() - startedAt,
           } satisfies WebFetchRenderDetails,
         };
       } catch (error) {
@@ -616,6 +760,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
             phase: latestDetails.phase,
             url: latestDetails.url,
             spinnerTick,
+            durationMs: Date.now() - startedAt,
           } satisfies WebFetchRenderDetails,
         };
       } finally {
@@ -634,7 +779,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       );
     },
 
-    renderResult(result, { expanded, isPartial }, theme) {
+    renderResult(result, { isPartial }, theme) {
       if (isPartial) {
         const details =
           (result.details as WebFetchRenderDetails | undefined) ?? {};
@@ -642,7 +787,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       }
 
       const details =
-        (result.details as WebFetchRenderDetails | undefined) ?? {};
+        (result.details as PersistedWebFetchRenderDetails | undefined) ?? {};
       const textContent = result.content.find((item) => item.type === "text");
       const outputText = textContent?.type === "text" ? textContent.text : "";
 
@@ -660,7 +805,11 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
         );
       }
 
-      return createWebFetchResultComponent(details, expanded, theme);
+      return createWebFetchResultComponent(
+        resolveWebFetchSummary(details, defaults.maxChars),
+        details.format,
+        theme,
+      );
     },
   });
 
@@ -689,6 +838,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       let latestSnapshot: BatchFetchProgressSnapshot | undefined;
       let spinnerTick = 0;
       let spinnerTimer: ReturnType<typeof setInterval> | null = null;
+      const batchStartedAt = Date.now();
 
       const emitProgress = (snapshot: BatchFetchProgressSnapshot) => {
         onUpdate?.({
@@ -759,7 +909,11 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
             verbose,
             started: true,
             batchProgress: finalProgress,
-            batchResult,
+            batchSummary: buildBatchResultSummary(
+              batchResult,
+              runtimeDefaults,
+              batchStartedAt,
+            ),
             spinnerTick,
           } satisfies BatchRenderDetails,
         };

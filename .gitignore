@@ -6,3 +6,4 @@ packages/*/coverage/
 .vscode/
 *.log
 .DS_Store
+package-lock.json

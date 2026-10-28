@@ -157,7 +157,7 @@ describe("pi extension", () => {
     );
   });
 
-  it("renders web_fetch call header, compact collapsed result, and full output when expanded", () => {
+  it("renders web_fetch call header and a compact result summary without page content", () => {
     const registeredTool = findTool("web_fetch");
     expect(registeredTool.renderResult).toBeDefined();
 
@@ -167,6 +167,20 @@ describe("pi extension", () => {
     const callText = callLines?.join("\n") ?? "";
     expect(callText).toContain("web_fetch https://example.com/article");
 
+    const pageLines = [
+      "# Example Article",
+      "Line 1",
+      "Line 2",
+      "Line 3",
+      "Line 4",
+      "Line 5",
+      "Line 6",
+      "Line 7",
+      "Line 8",
+      "Line 9",
+    ];
+    const pageContent = pageLines.join("\n");
+
     const result = {
       content: [
         {
@@ -181,16 +195,7 @@ describe("pi extension", () => {
             "> Words: 321",
             "> Browser: chrome_145/windows",
             "",
-            "# Example Article",
-            "Line 1",
-            "Line 2",
-            "Line 3",
-            "Line 4",
-            "Line 5",
-            "Line 6",
-            "Line 7",
-            "Line 8",
-            "Line 9",
+            pageContent,
           ].join("\n"),
         },
       ],
@@ -198,67 +203,45 @@ describe("pi extension", () => {
         verbose: false,
         format: "markdown",
         maxChars: 50000,
-        fetchResult: {
+        fetchSummary: {
+          kind: "content",
           url: "https://example.com/article",
           finalUrl: "https://example.com/article",
-          title: "Example Article",
-          author: "",
-          published: "2026-04-10",
-          site: "Example",
-          language: "en",
+          ok: true,
+          charCount: pageContent.length,
           wordCount: 321,
-          content: [
-            "# Example Article",
-            "Line 1",
-            "Line 2",
-            "Line 3",
-            "Line 4",
-            "Line 5",
-            "Line 6",
-            "Line 7",
-            "Line 8",
-            "Line 9",
-          ].join("\n"),
-          browser: "chrome_145",
-          os: "windows",
+          truncated: false,
+          title: "Example Article",
+          published: "2026-04-10",
         },
       },
     };
 
-    const collapsedLines = registeredTool
-      .renderResult?.(result, { expanded: false }, testTheme)
-      .render(120);
-    const collapsedText = collapsedLines?.join("\n") ?? "";
-    expect(collapsedText).toContain("Title: Example Article");
-    expect(collapsedText).toContain("Published: 2026-04-10");
-    expect(collapsedText).not.toContain("URL: https://example.com/article");
-    expect(collapsedText).not.toContain("Author: Ada Lovelace");
-    expect(collapsedText).not.toContain("Site: Example");
-    expect(collapsedText).not.toContain("Language: en");
-    expect(collapsedText).not.toContain("Words: 321");
-    expect(collapsedText).not.toContain("Browser: chrome_145/windows");
-    expect(collapsedText).toContain("Example Article");
-    expect(collapsedText).toContain("Line 6");
-    expect(collapsedText).not.toContain("Line 8");
-    expect(collapsedText).toContain("Ctrl+O to expand");
-    expect(collapsedText).not.toContain("web_fetch Example Article");
+    // Collapsed and expanded views intentionally render the same compact
+    // summary; page text stays in the agent-facing content payload.
+    for (const expanded of [false, true] as const) {
+      const lines = registeredTool
+        .renderResult?.(result, { expanded }, testTheme)
+        .render(120);
+      const text = lines?.join("\n") ?? "";
 
-    const expandedLines = registeredTool
-      .renderResult?.(result, { expanded: true }, testTheme)
-      .render(120);
-    const expandedText = expandedLines?.join("\n") ?? "";
-    expect(expandedText).toContain("Title: Example Article");
-    expect(expandedText).toContain("Published: 2026-04-10");
-    expect(expandedText).not.toContain("URL: https://example.com/article");
-    expect(expandedText).not.toContain("Author: Ada Lovelace");
-    expect(expandedText).toContain("Example Article");
-    expect(expandedText).toContain("Line 9");
+      expect(text).toContain("Title: Example Article");
+      expect(text).toContain("Published: 2026-04-10");
+      expect(text).toContain(`${pageContent.length} chars · 321 words`);
+
+      // No page content and no expand hint in the TUI view.
+      expect(text).not.toContain("Line 1");
+      expect(text).not.toContain("# Example Article");
+      expect(text).not.toContain("Ctrl+O");
+    }
   });
 
   it("renders user-facing metadata with YAML-like key and string colors", () => {
     const registeredTool = findTool("web_fetch");
     expect(registeredTool.renderResult).toBeDefined();
 
+    const pageContent = "# Example Article";
+
     const result = {
       content: [
         {
@@ -273,7 +256,7 @@ describe("pi extension", () => {
             "> Words: 321",
             "> Browser: chrome_145/windows",
             "",
-            "# Example Article",
+            pageContent,
           ].join("\n"),
         },
       ],
@@ -281,18 +264,16 @@ describe("pi extension", () => {
         verbose: false,
         format: "markdown",
         maxChars: 50000,
-        fetchResult: {
+        fetchSummary: {
+          kind: "content",
           url: "https://example.com/article",
           finalUrl: "https://example.com/article",
-          title: "Example Article",
-          author: "Ada Lovelace",
-          published: "2026-04-10",
-          site: "Example",
-          language: "en",
+          ok: true,
+          charCount: pageContent.length,
           wordCount: 321,
-          content: "# Example Article",
-          browser: "chrome_145",
-          os: "windows",
+          truncated: false,
+          title: "Example Article",
+          published: "2026-04-10",
         },
       },
     };
@@ -344,7 +325,6 @@ describe("pi extension", () => {
     const text = lines?.join("\n") ?? "";
     expect(text).toContain("Timed out while downloading the file.");
     expect(text).not.toContain("Suggested timeoutMs: 120000");
-    expect(text).not.toContain("No fetch result available.");
   });
 
   it("renders compact attachment results without content preview", () => {
@@ -367,19 +347,11 @@ describe("pi extension", () => {
         verbose: false,
         format: "markdown",
         maxChars: 50000,
-        fetchResult: {
+        fetchSummary: {
           kind: "file",
           url: "https://example.com/file.pdf",
           finalUrl: "https://example.com/file.pdf",
-          title: "",
-          author: "",
-          published: "",
-          site: "example.com",
-          language: "",
-          wordCount: 0,
-          content: "",
-          browser: "chrome_145",
-          os: "windows",
+          ok: true,
           filePath: "/tmp/file.pdf",
           fileSize: 42,
           mimeType: "application/pdf",
@@ -395,6 +367,317 @@ describe("pi extension", () => {
     expect(collapsedText).toContain("Mime type: application/pdf");
     expect(collapsedText).toContain("File path: /tmp/file.pdf");
     expect(collapsedText).not.toContain("Ctrl+O to expand");
+  });
+
+  // Sessions persisted before the compact-details change stored the full
+  // FetchResult under `details.fetchResult`. pi rehydrates those details on
+  // every session load/resume/fork, so the renderer must keep showing them.
+  it("rehydrates legacy persisted details.fetchResult content results", () => {
+    const registeredTool = findTool("web_fetch");
+    expect(registeredTool.renderResult).toBeDefined();
+
+    const legacyMaxChars = 40;
+    const legacyContent = `${"Legacy page body line. ".repeat(10).slice(0, legacyMaxChars)}\n\n[... truncated]`;
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: [
+            "> URL: https://example.com/legacy",
+            "> Title: Legacy Article",
+            "",
+            legacyContent,
+          ].join("\n"),
+        },
+      ],
+      details: {
+        verbose: false,
+        format: "markdown",
+        maxChars: legacyMaxChars,
+        fetchResult: {
+          kind: "content",
+          url: "https://example.com/legacy",
+          finalUrl: "https://example.com/legacy",
+          title: "Legacy Article",
+          author: "Ada Lovelace",
+          published: "2025-11-02",
+          site: "Example",
+          language: "en",
+          wordCount: 87,
+          browser: "chrome_145",
+          os: "windows",
+          content: legacyContent,
+        },
+      },
+    };
+
+    for (const expanded of [false, true] as const) {
+      const text =
+        registeredTool
+          .renderResult?.(result, { expanded }, testTheme)
+          .render(120)
+          .join("\n") ?? "";
+
+      expect(text).toContain("Title: Legacy Article");
+      expect(text).toContain("Published: 2025-11-02");
+      expect(text).toContain(
+        `${legacyContent.length} chars · 87 words · truncated`,
+      );
+      expect(text).not.toContain("Legacy page body line.");
+    }
+  });
+
+  it("does not flag legacy content as truncated when it fits historical maxChars", () => {
+    const registeredTool = findTool("web_fetch");
+    const legacyContent = "Short legacy body.";
+    const result = {
+      content: [{ type: "text", text: legacyContent }],
+      details: {
+        verbose: false,
+        format: "markdown",
+        maxChars: 50000,
+        fetchResult: {
+          kind: "content",
+          url: "https://example.com/short",
+          finalUrl: "https://example.com/short",
+          title: "Short Legacy",
+          author: "",
+          published: "",
+          site: "",
+          language: "en",
+          wordCount: 3,
+          browser: "chrome_145",
+          os: "windows",
+          content: legacyContent,
+        },
+      },
+    };
+
+    const text =
+      registeredTool
+        .renderResult?.(result, { expanded: false }, testTheme)
+        .render(120)
+        .join("\n") ?? "";
+
+    expect(text).toContain("Title: Short Legacy");
+    expect(text).not.toContain("Published:");
+    expect(text).toContain(`${legacyContent.length} chars · 3 words`);
+    expect(text).not.toContain("truncated");
+  });
+
+  // Legacy sessions persisted `details.maxChars` as the settings default, not
+  // the per-call `maxChars` that actually truncated the content.
+  it("flags legacy content truncated by a smaller per-call maxChars than the persisted default", () => {
+    const registeredTool = findTool("web_fetch");
+    const perCallMaxChars = 40;
+    const legacyContent = `${"Legacy page body line. ".repeat(10).slice(0, perCallMaxChars)}\n\n[... truncated]`;
+    const result = {
+      content: [{ type: "text", text: legacyContent }],
+      details: {
+        verbose: false,
+        format: "markdown",
+        maxChars: 50000,
+        fetchResult: {
+          kind: "content",
+          url: "https://example.com/custom-limit",
+          finalUrl: "https://example.com/custom-limit",
+          title: "Custom Limit Article",
+          author: "",
+          published: "",
+          site: "",
+          language: "en",
+          wordCount: 87,
+          browser: "chrome_145",
+          os: "windows",
+          content: legacyContent,
+        },
+      },
+    };
+
+    for (const expanded of [false, true] as const) {
+      const text =
+        registeredTool
+          .renderResult?.(result, { expanded }, testTheme)
+          .render(120)
+          .join("\n") ?? "";
+
+      expect(text).toContain("Title: Custom Limit Article");
+      expect(text).toContain(`${legacyContent.length} chars`);
+      expect(text).toMatch(/truncated/i);
+      expect(text).not.toContain("Legacy page body line.");
+    }
+  });
+
+  it("marks a current result truncated at maxChars as truncated", () => {
+    const registeredTool = findTool("web_fetch");
+    const result = {
+      content: [{ type: "text", text: "> Title: Truncated Article" }],
+      details: {
+        verbose: false,
+        format: "markdown",
+        maxChars: 40,
+        fetchSummary: {
+          kind: "content",
+          url: "https://example.com/truncated",
+          finalUrl: "https://example.com/truncated",
+          ok: true,
+          charCount: 57,
+          wordCount: 87,
+          truncated: true,
+          title: "Truncated Article",
+          published: "",
+        },
+      },
+    };
+
+    for (const expanded of [false, true] as const) {
+      const text =
+        registeredTool
+          .renderResult?.(result, { expanded }, testTheme)
+          .render(120)
+          .join("\n") ?? "";
+
+      expect(text).toContain("57 chars");
+      expect(text).toMatch(/truncated/i);
+    }
+  });
+
+  // Core reports `wordCount: 0` for raw responses because it never counts
+  // words there; the renderer must not present that as a measured zero.
+  it("does not report zero words for a nonempty legacy raw response", () => {
+    const registeredTool = findTool("web_fetch");
+    const rawBody =
+      '{"items":[{"id":1,"name":"alpha"},{"id":2,"name":"beta"}]}';
+    const result = {
+      content: [{ type: "text", text: rawBody }],
+      details: {
+        verbose: false,
+        format: "raw",
+        maxChars: 50000,
+        fetchResult: {
+          kind: "content",
+          url: "https://example.com/api/items",
+          finalUrl: "https://example.com/api/items",
+          title: "",
+          author: "",
+          published: "",
+          site: "example.com",
+          language: "",
+          wordCount: 0,
+          browser: "chrome_145",
+          os: "windows",
+          contentType: "application/json",
+          content: rawBody,
+        },
+      },
+    };
+
+    for (const expanded of [false, true] as const) {
+      const text =
+        registeredTool
+          .renderResult?.(result, { expanded }, testTheme)
+          .render(120)
+          .join("\n") ?? "";
+
+      expect(text).toContain(`${rawBody.length} chars`);
+      expect(text).not.toMatch(/\b0 words\b/);
+      expect(text).not.toContain('"name":"alpha"');
+    }
+  });
+
+  it("rehydrates legacy persisted details.fetchResult file results", () => {
+    const registeredTool = findTool("web_fetch");
+    const result = {
+      content: [
+        {
+          type: "text",
+          text: "> URL: https://example.com/report.pdf\n> File path: /tmp/legacy-report.pdf",
+        },
+      ],
+      details: {
+        verbose: false,
+        format: "markdown",
+        maxChars: 50000,
+        fetchResult: {
+          kind: "file",
+          url: "https://example.com/report.pdf",
+          finalUrl: "https://cdn.example.com/report.pdf",
+          title: "",
+          author: "",
+          published: "",
+          site: "",
+          language: "",
+          wordCount: 0,
+          browser: "chrome_145",
+          os: "windows",
+          content: "",
+          filePath: "/tmp/legacy-report.pdf",
+          fileSize: 2048,
+          mimeType: "application/pdf",
+        },
+      },
+    };
+
+    const text =
+      registeredTool
+        .renderResult?.(result, { expanded: false }, testTheme)
+        .render(120)
+        .join("\n") ?? "";
+
+    expect(text).toContain("File size: 2048");
+    expect(text).toContain("Mime type: application/pdf");
+    expect(text).toContain("File path: /tmp/legacy-report.pdf");
+  });
+
+  it("prefers details.fetchSummary over a legacy details.fetchResult when both exist", () => {
+    const registeredTool = findTool("web_fetch");
+    const result = {
+      content: [{ type: "text", text: "> Title: Current Summary Title" }],
+      details: {
+        verbose: false,
+        format: "markdown",
+        maxChars: 50000,
+        fetchResult: {
+          kind: "content",
+          url: "https://example.com/stale",
+          finalUrl: "https://example.com/stale",
+          title: "Stale Legacy Title",
+          author: "",
+          published: "2020-01-01",
+          site: "",
+          language: "en",
+          wordCount: 999,
+          browser: "chrome_145",
+          os: "windows",
+          content: "Stale legacy page body.",
+        },
+        fetchSummary: {
+          kind: "content",
+          url: "https://example.com/current",
+          finalUrl: "https://example.com/current",
+          ok: true,
+          charCount: 1234,
+          wordCount: 210,
+          truncated: false,
+          title: "Current Summary Title",
+          published: "2026-10-01",
+        },
+      },
+    };
+
+    const text =
+      registeredTool
+        .renderResult?.(result, { expanded: true }, testTheme)
+        .render(120)
+        .join("\n") ?? "";
+
+    expect(text).toContain("Title: Current Summary Title");
+    expect(text).toContain("Published: 2026-10-01");
+    expect(text).toContain("1234 chars · 210 words");
+    expect(text).not.toContain("Stale Legacy Title");
+    expect(text).not.toContain("2020-01-01");
+    expect(text).not.toContain("999 words");
+    expect(text).not.toContain("Stale legacy page body.");
   });
 
   it("returns labeled per-item results and streams progress updates for batch_web_fetch", async () => {
@@ -430,7 +713,20 @@ describe("pi extension", () => {
     expect(response.content[0]?.text).toContain(
       "Error: Invalid URL: not-a-url",
     );
-    expect(response.details?.batchResult).toBeDefined();
+    expect(response.details?.batchSummary).toBeDefined();
     expect(response.details?.batchProgress).toBeDefined();
+
+    const details = response.details as {
+      batchSummary?: {
+        items?: Array<Record<string, unknown>>;
+      };
+    };
+    expect(details?.batchSummary?.items?.[0]).toMatchObject({
+      index: 0,
+      url: "not-a-url",
+      ok: false,
+      status: "error",
+    });
+    expect(details?.batchSummary?.items?.[0]?.error).toContain("Invalid URL");
   });
 });

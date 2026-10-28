@@ -62,6 +62,11 @@ batch_web_fetch(requests, verbose?)
 
 For `batch_web_fetch`, each item in `requests` accepts the same parameters as `web_fetch` except `verbose`.
 
+Fetched content remains available to the agent, while pi stores compact result
+details in session history. The `web_fetch` history view shows metadata and
+counts instead of a page preview, even when expanded. Sessions saved by earlier
+versions remain readable.
+
 ## Output formats
 
 | Format     | What you get                                                                    |

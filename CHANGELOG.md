@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.22 - 2026-10-28
+
+- **patch**: chore(deps): update dev dependencies (#23)
+
 ## v0.3.21 - 2026-10-27
 
 - **patch**: fix(pi): support Node 22.19 and later (#27)

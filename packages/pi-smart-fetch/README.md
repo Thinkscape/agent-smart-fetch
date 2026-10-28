@@ -69,13 +69,13 @@ versions remain readable.
 
 ## Output formats
 
-| Format | What you get |
-|---|---|
-| `markdown` | Best default for readable page content |
-| `html` | Cleaned HTML output |
-| `text` | Plain text with markdown stripped |
-| `json` | Structured JSON for metadata-heavy workflows |
-| `raw` | Full raw server response without extraction or truncation — for further parsing |
+| Format     | What you get                                                                    |
+| ---------- | ------------------------------------------------------------------------------- |
+| `markdown` | Best default for readable page content                                          |
+| `html`     | Cleaned HTML output                                                             |
+| `text`     | Plain text with markdown stripped                                               |
+| `json`     | Structured JSON for metadata-heavy workflows                                    |
+| `raw`      | Full raw server response without extraction or truncation — for further parsing |
 
 ## Global defaults
 
@@ -95,17 +95,17 @@ Optional settings in `~/.pi/agent/settings.json` or `.pi/settings.json`:
 }
 ```
 
-| Setting | Default | Description |
-|---|---:|---|
-| `smartFetchVerboseByDefault` | `false` | Stored default for the compatibility `verbose` flag |
-| `smartFetchDefaultMaxChars` | `50000` | Default `maxChars` limit |
-| `smartFetchDefaultTimeoutMs` | `15000` | Default request timeout in milliseconds |
-| `smartFetchDefaultBrowser` | `chrome_145` | Default browser fingerprint profile |
-| `smartFetchDefaultOs` | `windows` | Default OS fingerprint profile |
-| `smartFetchDefaultRemoveImages` | `false` | Strip image references by default |
-| `smartFetchDefaultIncludeReplies` | `extractors` | Include replies/comments only when site extractors support them |
-| `smartFetchDefaultBatchConcurrency` | `8` | Default bounded concurrency for `batch_web_fetch` |
-| `smartFetchTempDir` | OS temp dir | Base directory for attachment and binary downloads |
+| Setting                             |      Default | Description                                                     |
+| ----------------------------------- | -----------: | --------------------------------------------------------------- |
+| `smartFetchVerboseByDefault`        |      `false` | Stored default for the compatibility `verbose` flag             |
+| `smartFetchDefaultMaxChars`         |      `50000` | Default`maxChars` limit                                         |
+| `smartFetchDefaultTimeoutMs`        |      `15000` | Default request timeout in milliseconds                         |
+| `smartFetchDefaultBrowser`          | `chrome_145` | Default browser fingerprint profile                             |
+| `smartFetchDefaultOs`               |    `windows` | Default OS fingerprint profile                                  |
+| `smartFetchDefaultRemoveImages`     |      `false` | Strip image references by default                               |
+| `smartFetchDefaultIncludeReplies`   | `extractors` | Include replies/comments only when site extractors support them |
+| `smartFetchDefaultBatchConcurrency` |          `8` | Default bounded concurrency for `batch_web_fetch`               |
+| `smartFetchTempDir`                 |  OS temp dir | Base directory for attachment and binary downloads              |
 
 Notes:
 - Project `.pi/settings.json` overrides global `~/.pi/agent/settings.json`

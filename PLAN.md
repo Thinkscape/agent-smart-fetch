@@ -6,7 +6,7 @@ Currently the tool supports four output formats: `markdown`, `html`, `text`, `js
 
 We're adding a `raw` format that:
 - Uses wreq-js for TLS fingerprinting (same as other formats)
-- Uses a browser-like `Accept` header (HTML, XML, JSON, markdown, */*)
+- Uses a browser-like `Accept` header (HTML, XML, JSON, markdown, `*/*`)
 - Returns the full, unmodified response body — no Defuddle content extraction or stripping
 - May still call Defuddle for site-specific workarounds (e.g. X/Twitter deleted-tweet detection), but ignores Defuddle's extracted content and returns raw body
 - Does not truncate by default
@@ -36,40 +36,40 @@ The changes touch the full stack:
 
 ### Core package (`packages/core/src/`)
 
-| File | Change |
-|------|--------|
-| `types.ts` | Add `"raw"` to `OutputFormat`. Add optional `contentType?: string` to `BaseFetchResult`. |
+| File         | Change                                                                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `types.ts`   | Add `"raw"` to `OutputFormat`. Add optional `contentType?: string` to `BaseFetchResult`.                                                                                         |
 | `extract.ts` | Add `raw` branch in `createDefuddleFetch` — skip Defuddle extraction, return raw body. Still call Defuddle for X/Twitter workaround detection. Populate `contentType` on result. |
-| `format.ts` | Include `Content-Type` in metadata headers when `result.contentType` is present. |
-| `tool.ts` | Add `Type.Literal("raw")` to the format union. Update description. |
+| `format.ts`  | Include `Content-Type` in metadata headers when `result.contentType` is present.                                                                                                 |
+| `tool.ts`    | Add `Type.Literal("raw")` to the format union. Update description.                                                                                                               |
 
 ### CLI package (`packages/smart-fetch/src/`)
 
-| File | Change |
-|------|--------|
+| File     | Change                                                                            |
+| -------- | --------------------------------------------------------------------------------- |
 | `cli.ts` | Add `--raw` shorthand flag. Add `"raw"` to valid format values. Update help text. |
 
 ### Pi extension (`packages/pi-smart-fetch/src/`)
 
-| File | Change |
-|------|--------|
+| File       | Change                                         |
+| ---------- | ---------------------------------------------- |
 | `index.ts` | Add `Type.Literal("raw")` to the format union. |
 
 ### OpenClaw extension (`packages/openclaw-smart-fetch/src/`)
 
-| File | Change |
-|------|--------|
+| File       | Change                                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `index.ts` | Add `Type.Literal("raw")` to the format union (via `createBaseFetchToolParameterProperties` which gets it from `tool.ts`). |
 
 ### Skills & docs
 
-| File | Change |
-|------|--------|
+| File                                                        | Change                                                         |
+| ----------------------------------------------------------- | -------------------------------------------------------------- |
 | `packages/openclaw-smart-fetch/skills/smart-fetch/SKILL.md` | Add `raw` format to parameter docs and explain when to use it. |
-| `packages/smart-fetch/README.md` | Add `raw` to output formats table. |
-| `packages/pi-smart-fetch/README.md` | Add `raw` to output formats table. |
-| `packages/openclaw-smart-fetch/README.md` | Add `raw` to output formats table. |
-| `README.md` (root) | Update format list if needed. |
+| `packages/smart-fetch/README.md`                            | Add `raw` to output formats table.                             |
+| `packages/pi-smart-fetch/README.md`                         | Add `raw` to output formats table.                             |
+| `packages/openclaw-smart-fetch/README.md`                   | Add `raw` to output formats table.                             |
+| `README.md` (root)                                          | Update format list if needed.                                  |
 
 ## Reuse
 
@@ -84,15 +84,18 @@ The changes touch the full stack:
 ## Steps
 
 ### Step 1: Extend types
+
 - [ ] Add `"raw"` to `OutputFormat` union in `packages/core/src/types.ts`
 - [ ] Add optional `contentType?: string` to `BaseFetchResult` in `packages/core/src/types.ts`
 
 ### Step 2: Add raw Accept header constant
+
 - [ ] In `packages/core/src/constants.ts`, add `DEFAULT_RAW_ACCEPT_HEADER`:
   `"text/html,application/xhtml+xml,application/json,application/xml;q=0.9,text/markdown;q=0.8,text/plain;q=0.8,*/*;q=0.7"`
 - [ ] In `extract.ts`, use this new header when format is `"raw"`
 
 ### Step 3: Implement raw logic in extract pipeline
+
 - [ ] In `createDefuddleFetch` (`packages/core/src/extract.ts`), after getting `rawBody` and handling client-side redirects, add a `raw` format branch that:
   - For file downloads (binary/attachment): same as current behavior — stream to file, return `FileFetchResult` with `contentType` populated
   - For all text responses (HTML, JSON, plain text, markdown, etc.): skip Defuddle extraction entirely, return raw body as-is
@@ -102,13 +105,16 @@ The changes touch the full stack:
 - [ ] Ensure error handling (timeouts, HTTP errors, network errors) still works for raw mode
 
 ### Step 4: Include Content-Type in metadata headers
+
 - [ ] In `buildMetadataHeader()` and `buildCompactMetadataHeader()` in `packages/core/src/format.ts`, add `Content-Type` line when `result.contentType` is present
 
 ### Step 5: Update tool schema
+
 - [ ] In `createBaseFetchToolParameterProperties()` in `packages/core/src/tool.ts`, add `Type.Literal("raw")` to the format union
 - [ ] Update the format parameter description to mention `"raw"` — "raw server response without extraction or truncation (for further parsing)"
 
 ### Step 6: Update CLI
+
 - [ ] Add `--raw` shorthand flag in `parseCliArgs()` in `packages/smart-fetch/src/cli.ts`
 - [ ] Add `"raw"` to the valid format array
 - [ ] Update help text — add `--raw` option and mention it in EXAMPLES
@@ -118,12 +124,15 @@ The changes touch the full stack:
   - When TTY: keep current behavior (report file path in output)
 
 ### Step 7: Update Pi extension
+
 - [ ] No code changes needed if using shared schema helper from core (which already includes `"raw"`). Verify format literals are in sync.
 
 ### Step 8: Update OpenClaw extension
+
 - [ ] Same as Pi — `createBaseFetchToolParameterProperties` is already used. Verify.
 
 ### Step 9: Update skills and documentation
+
 - [ ] Update `packages/openclaw-smart-fetch/skills/smart-fetch/SKILL.md`:
   - Add `raw` to the format parameter docs
   - Explain: "returns the full raw server response (HTML/markdown/JSON/etc) without extraction or truncation — useful for further parsing"
@@ -132,6 +141,7 @@ The changes touch the full stack:
 - [ ] Update `packages/openclaw-smart-fetch/README.md`: add `raw` to output formats table
 
 ### Step 10: Tests
+
 - [ ] Add unit test for raw format metadata (Content-Type in headers) in `packages/core/test/unit/format.test.ts`
 - [ ] Add unit test for raw format extract behavior in `packages/core/test/unit/extract.unit.test.ts`
 

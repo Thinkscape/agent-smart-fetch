@@ -64,6 +64,15 @@ type WebFetchRenderDetails = {
   durationMs?: number;
 };
 
+/**
+ * Details as rehydrated from a persisted session. Sessions written before the
+ * compact `fetchSummary` existed stored the full `FetchResult` instead; it is
+ * only read to derive a summary for rendering and is never written anymore.
+ */
+type PersistedWebFetchRenderDetails = WebFetchRenderDetails & {
+  fetchResult?: FetchResult;
+};
+
 type BatchRenderDetails = {
   verbose?: boolean;
   batchProgress?: BatchFetchProgressSnapshot;
@@ -169,6 +178,39 @@ function buildFetchResultSummary(
     published: result.published,
     ...(result.contentType ? { contentType: result.contentType } : {}),
   };
+}
+
+function resolveWebFetchSummary(
+  details: PersistedWebFetchRenderDetails,
+  defaultMaxChars: number,
+): WebFetchResultSummary | undefined {
+  if (details.fetchSummary) {
+    return details.fetchSummary;
+  }
+
+  const legacyResult = details.fetchResult;
+  if (!legacyResult) {
+    return undefined;
+  }
+  if (
+    !isFileFetchResult(legacyResult) &&
+    typeof legacyResult.content !== "string"
+  ) {
+    return undefined;
+  }
+
+  const summary = buildFetchResultSummary(
+    legacyResult,
+    details.maxChars ?? defaultMaxChars,
+  );
+  // Legacy sessions persisted the settings default as `details.maxChars`, not
+  // the call's actual limit, so a custom-limit truncation would be missed by
+  // the length check. Core's trailing marker is a best-effort heuristic here:
+  // page text that literally ends with the marker is also reported truncated.
+  if (summary.kind === "content" && !isFileFetchResult(legacyResult)) {
+    summary.truncated ||= legacyResult.content.endsWith(TRUNCATION_MARKER);
+  }
+  return summary;
 }
 
 function buildBatchResultSummary(
@@ -413,12 +455,12 @@ function buildWebFetchMetadataLines(
 }
 
 function createWebFetchResultComponent(
-  details: WebFetchRenderDetails,
+  summary: WebFetchResultSummary | undefined,
+  format: OutputFormat | undefined,
   theme: {
     fg(color: string, value: string): string;
   },
 ) {
-  const summary = details.fetchSummary;
   if (!summary) {
     return new Text(theme.fg("muted", "No fetch result available."), 0, 0);
   }
@@ -446,17 +488,23 @@ function createWebFetchResultComponent(
     return container;
   }
 
-  // The full extracted text lives in the tool's `content` payload, which pi
-  // persists for the agent's context. The persisted `details` only carry the
-  // compact summary above, so there is no page content to preview or expand
-  // here — show the fetch stats instead.
+  // The extracted page text is available in the tool's `content` payload, but
+  // this renderer intentionally stays compact in both collapsed and expanded
+  // views and shows only fetch metadata and stats, never a content preview.
+  // Core does not count words for raw responses and reports a placeholder 0,
+  // so omit the word count there instead of claiming the page has no words.
+  const countText =
+    format === "raw"
+      ? `${summary.charCount} chars`
+      : `${summary.charCount} chars · ${summary.wordCount} words`;
   const statsLines = [
+    theme.fg("muted", countText + (summary.truncated ? " · truncated" : "")),
     theme.fg(
-      "muted",
-      `${summary.charCount} chars · ${summary.wordCount} words` +
-        (summary.truncated ? " · truncated" : ""),
+      "dim",
+      summary.truncated
+        ? "Content was truncated to maxChars before delivery to the agent."
+        : "Full content was delivered to the agent.",
     ),
-    theme.fg("dim", "Full content was delivered to the agent."),
   ];
 
   if (metadataLines.length > 0) {
@@ -739,7 +787,7 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
       }
 
       const details =
-        (result.details as WebFetchRenderDetails | undefined) ?? {};
+        (result.details as PersistedWebFetchRenderDetails | undefined) ?? {};
       const textContent = result.content.find((item) => item.type === "text");
       const outputText = textContent?.type === "text" ? textContent.text : "";
 
@@ -757,7 +805,11 @@ export default function piSmartFetchExtension(pi: ExtensionAPI) {
         );
       }
 
-      return createWebFetchResultComponent(details, theme);
+      return createWebFetchResultComponent(
+        resolveWebFetchSummary(details, defaults.maxChars),
+        details.format,
+        theme,
+      );
     },
   });
 

@@ -404,15 +404,6 @@ function isTwitterJsDisabledPage(document: Document, url: string): boolean {
   );
 }
 
-function isJsDisabledShellContent(content: string | undefined): boolean {
-  if (!content) return false;
-  // Server-rendered JS-disabled shells (e.g. developer.apple.com) contain a
-  // handful of noscript boilerplate words, which can exceed the word-count
-  // threshold alone. Detect the marker so the alternate-link fallback still
-  // fires for these pages.
-  return /(?:requires|needs)\s+JavaScript/i.test(content);
-}
-
 function extractDomTextFallback(document: Document): string {
   const bodyText =
     document.body?.textContent ?? document.documentElement?.textContent ?? "";
@@ -1624,11 +1615,14 @@ export function createDefuddleFetch(
       let wordCount = extracted.wordCount;
 
       if (!extractedContent || wordCount === 0) {
+        // Defuddle found no article content. A matching declared alternate is
+        // a better source than raw DOM text, which on JS-rendered shells is
+        // mostly navigation, account templates, and noscript warnings.
+        const alternateResult = await tryAlternateLinkFallback();
+        if (alternateResult) return alternateResult;
+
         const fallbackText = extractDomTextFallback(fallbackDocument);
         if (!fallbackText) {
-          const alternateResult = await tryAlternateLinkFallback();
-          if (alternateResult) return alternateResult;
-
           return {
             error: `No content extracted from ${opts.url}. May need JS rendering or is blocked.`,
             code: "no_content",
@@ -1655,9 +1649,8 @@ export function createDefuddleFetch(
         format === "text" ? extractedContent : markdownToText(extractedContent),
       );
       if (
-        (Math.min(wordCount, extractedTextWordCount) <
-          MIN_EXTRACTED_WORDS_BEFORE_ALTERNATE_FALLBACK ||
-          isJsDisabledShellContent(extractedContent)) &&
+        Math.min(wordCount, extractedTextWordCount) <
+          MIN_EXTRACTED_WORDS_BEFORE_ALTERNATE_FALLBACK &&
         alternateLinks.length > 0
       ) {
         const alternateResult = await tryAlternateLinkFallback();

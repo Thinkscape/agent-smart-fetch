@@ -68,6 +68,18 @@ interface RegisteredTool {
     content: Array<{ type: string; text: string }>;
     details?: ToolExecutionDetails;
   }>;
+  renderResult?: (
+    result: {
+      content: Array<{ type: string; text: string }>;
+      details?: ToolExecutionDetails;
+    },
+    options: { expanded: boolean; isPartial?: boolean },
+    theme: {
+      bold(value: string): string;
+      fg(color: string, value: string): string;
+      bg(color: string, value: string): string;
+    },
+  ) => { render(width: number): string[] };
 }
 
 function findTools() {
@@ -148,6 +160,84 @@ describe("compact tool-result details (session-file bloat fix)", () => {
     expect(details.durationMs).toBeGreaterThan(0);
     expect(detailsJson).not.toContain(PAGE_MARKER);
     expect(Buffer.byteLength(detailsJson)).toBeLessThan(2048);
+
+    // Rehydrating the persisted details (JSON round-trip, as pi does on
+    // session load) through the registered renderer shows the compact
+    // metadata without page text.
+    expect(summary?.title).toBeTruthy();
+    const rehydrated = JSON.parse(detailsJson) as ToolExecutionDetails;
+    const plainTheme = {
+      bold: (value: string) => value,
+      fg: (_color: string, value: string) => value,
+      bg: (_color: string, value: string) => value,
+    };
+    for (const expanded of [false, true] as const) {
+      const rendered =
+        tool
+          .renderResult?.(
+            { content: response.content, details: rehydrated },
+            { expanded },
+            plainTheme,
+          )
+          .render(120)
+          .join("\n") ?? "";
+      expect(rendered).toContain(`Title: ${summary?.title}`);
+      expect(rendered).toContain(
+        `${summary?.charCount} chars · ${summary?.wordCount} words · truncated`,
+      );
+      expect(rendered).not.toContain(PAGE_MARKER);
+    }
+  });
+
+  it("web_fetch raw responses do not render core's uncounted wordCount as zero words", async () => {
+    const [tool] = findTools().filter(
+      (candidate) => candidate.name === "web_fetch",
+    );
+    const cwd = await mkdtemp(join(tmpdir(), "smart-fetch-pi-compact-raw-"));
+    await mkdir(join(cwd, ".pi"), { recursive: true });
+    await writeFile(
+      join(cwd, ".pi", "settings.json"),
+      JSON.stringify({ smartFetchVerboseByDefault: false }, null, 2),
+    );
+
+    const response = await withLocalServer(async (url) =>
+      tool.execute(
+        "compact-web-fetch-raw",
+        { url, timeoutMs: 20000, format: "raw" },
+        undefined,
+        undefined,
+        { cwd },
+      ),
+    );
+    const agentText = response.content[0]?.text ?? "";
+    const details = response.details as ToolExecutionDetails;
+    const detailsJson = JSON.stringify(details);
+
+    expect(agentText).toContain(PAGE_MARKER);
+    expect(details.fetchSummary?.kind).toBe("content");
+    expect(details.fetchSummary?.charCount).toBeGreaterThan(0);
+    expect(detailsJson).not.toContain(PAGE_MARKER);
+
+    const rehydrated = JSON.parse(detailsJson) as ToolExecutionDetails;
+    const plainTheme = {
+      bold: (value: string) => value,
+      fg: (_color: string, value: string) => value,
+      bg: (_color: string, value: string) => value,
+    };
+    for (const expanded of [false, true] as const) {
+      const rendered =
+        tool
+          .renderResult?.(
+            { content: response.content, details: rehydrated },
+            { expanded },
+            plainTheme,
+          )
+          .render(120)
+          .join("\n") ?? "";
+      expect(rendered).toContain(`${details.fetchSummary?.charCount} chars`);
+      expect(rendered).not.toMatch(/\b0 words\b/);
+      expect(rendered).not.toContain(PAGE_MARKER);
+    }
   });
 
   it("batch_web_fetch keeps per-item page text in content and stores a compact summary in details", async () => {

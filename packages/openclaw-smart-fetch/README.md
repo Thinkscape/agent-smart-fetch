@@ -20,18 +20,18 @@
 This package works on general web pages, but some site types benefit especially
 from Defuddle's extractors and cleanup:
 
-| Site / page type | What's improved |
-|---|---|
-| **X / Twitter posts** | oEmbed-based tweet extraction; deleted/protected tweet detection |
-| **Reddit posts & threads** | Comment thread extraction with `includeReplies` |
-| **YouTube** | Page metadata and transcript extraction |
-| **GitHub** | READMEs, issues, PRs, discussions — strips chrome, keeps code blocks |
-| **Hacker News** | Thread extraction with comment cleanup |
-| **Substack / Medium** | Article content with author, publish date, paywall bypass on open pages |
-| **Stack Overflow** | Q&A extraction with code blocks and accepted answers |
-| **Wikipedia** | Article content with infobox cleanup |
-| **Documentation sites** | Keeps code blocks, callouts, footnotes, math (MathML/KaTeX/MathJax) |
-| **Blog posts & articles** | Schema.org metadata, clean main-content extraction |
+| Site / page type           | What's improved                                                         |
+| -------------------------- | ----------------------------------------------------------------------- |
+| **X / Twitter posts**      | oEmbed-based tweet extraction; deleted/protected tweet detection        |
+| **Reddit posts & threads** | Comment thread extraction with `includeReplies`                         |
+| **YouTube**                | Page metadata and transcript extraction                                 |
+| **GitHub**                 | READMEs, issues, PRs, discussions — strips chrome, keeps code blocks    |
+| **Hacker News**            | Thread extraction with comment cleanup                                  |
+| **Substack / Medium**      | Article content with author, publish date, paywall bypass on open pages |
+| **Stack Overflow**         | Q&A extraction with code blocks and accepted answers                    |
+| **Wikipedia**              | Article content with infobox cleanup                                    |
+| **Documentation sites**    | Keeps code blocks, callouts, footnotes, math (MathML/KaTeX/MathJax)     |
+| **Blog posts & articles**  | Schema.org metadata, clean main-content extraction                      |
 
 Notes:
 - Defuddle is the cleanup layer: it strips common page chrome like nav, sidebars, related links, share widgets, and footers
@@ -86,10 +86,10 @@ _without replacing `web_fetch` or changing any agent prompts_.
 
 ### Provider priority
 
-| Provider        | `autoDetectOrder`   | Credential required |
-|-----------------|:-------------------:|:-------------------|
-| **smart-fetch** | **10** (highest)    | No                 |
-| firecrawl       | 50                  | Yes (API key)      |
+| Provider        | `autoDetectOrder` | Credential required |
+| --------------- | :---------------: | :------------------ |
+| **smart-fetch** | **10** (highest)  | No                  |
+| firecrawl       |        50         | Yes (API key)       |
 
 Because `smart-fetch` has the highest priority and requires no credentials, it
 is selected first during auto-detection. If the smart_fetch provider itself
@@ -133,13 +133,13 @@ Skills are declared in the manifest (`openclaw.plugin.json`) under `"skills":
 
 ## Output formats
 
-| Format | What you get |
-|---|---|
-| `markdown` | Best default for readable page content |
-| `html` | Cleaned HTML output |
-| `text` | Plain text with markdown stripped |
-| `json` | Structured JSON for metadata-heavy workflows |
-| `raw` | Full raw server response without extraction or truncation — for further parsing |
+| Format     | What you get                                                                    |
+| ---------- | ------------------------------------------------------------------------------- |
+| `markdown` | Best default for readable page content                                          |
+| `html`     | Cleaned HTML output                                                             |
+| `text`     | Plain text with markdown stripped                                               |
+| `json`     | Structured JSON for metadata-heavy workflows                                    |
+| `raw`      | Full raw server response without extraction or truncation — for further parsing |
 
 ## Plugin config
 
@@ -167,16 +167,16 @@ See `openclaw.plugin.json` for the full schema. Configure under
 }
 ```
 
-| Setting | Default | Description |
-|---|---:|---|
-| `maxChars` | `50000` | Default maximum returned characters |
-| `timeoutMs` | `15000` | Default request timeout in milliseconds |
-| `browser` | `chrome_145` | Default browser fingerprint profile |
-| `os` | `windows` | Default OS fingerprint profile |
-| `removeImages` | `false` | Strip image references by default |
-| `includeReplies` | `extractors` | Include replies/comments only when site extractors support them |
-| `batchConcurrency` | `8` | Default bounded concurrency for `batch_smart_fetch` |
-| `tempDir` | OS temp dir | Directory for attachment and binary downloads |
+| Setting            |      Default | Description                                                     |
+| ------------------ | -----------: | --------------------------------------------------------------- |
+| `maxChars`         |      `50000` | Default maximum returned characters                             |
+| `timeoutMs`        |      `15000` | Default request timeout in milliseconds                         |
+| `browser`          | `chrome_145` | Default browser fingerprint profile                             |
+| `os`               |    `windows` | Default OS fingerprint profile                                  |
+| `removeImages`     |      `false` | Strip image references by default                               |
+| `includeReplies`   | `extractors` | Include replies/comments only when site extractors support them |
+| `batchConcurrency` |          `8` | Default bounded concurrency for `batch_smart_fetch`             |
+| `tempDir`          |  OS temp dir | Directory for attachment and binary downloads                   |
 
 ## Dev and publishing note
 

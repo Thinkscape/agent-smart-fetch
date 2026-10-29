@@ -19,7 +19,7 @@
     },
     "packages/core": {
       "name": "smart-fetch-core",
-      "version": "0.3.22",
+      "version": "0.3.23",
       "dependencies": {
         "@sinclair/typebox": "^0.34.52",
         "defuddle": "^0.19.2",
@@ -31,7 +31,7 @@
     },
     "packages/openclaw-smart-fetch": {
       "name": "openclaw-smart-fetch",
-      "version": "0.3.22",
+      "version": "0.3.23",
       "dependencies": {
         "@sinclair/typebox": "^0.34.52",
         "defuddle": "^0.19.2",
@@ -41,7 +41,7 @@
     },
     "packages/pi-smart-fetch": {
       "name": "pi-smart-fetch",
-      "version": "0.3.22",
+      "version": "0.3.23",
       "dependencies": {
         "defuddle": "^0.19.2",
         "linkedom": "^0.18.13",
@@ -55,7 +55,7 @@
     },
     "packages/smart-fetch": {
       "name": "@thinkscape/smart-fetch",
-      "version": "0.3.22",
+      "version": "0.3.23",
       "bin": {
         "smart-fetch": "./dist/cli.js",
         "sf": "./dist/cli.js",

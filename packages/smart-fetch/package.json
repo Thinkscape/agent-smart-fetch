@@ -51,7 +51,7 @@
     "@sinclair/typebox": "^0.34.52",
     "wreq-js": "^2.3.1",
     "defuddle": "^0.19.2",
-    "linkedom": "^0.18.13",
+    "linkedom": "^0.18.14",
     "mime-types": "^3.0.2",
     "lodash": "^4.18.1"
   }

@@ -60,7 +60,7 @@
   "dependencies": {
     "wreq-js": "^2.3.1",
     "defuddle": "^0.19.2",
-    "linkedom": "^0.18.13"
+    "linkedom": "^0.18.14"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

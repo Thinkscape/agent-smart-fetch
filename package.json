@@ -74,7 +74,7 @@
     "hooks:install": "bash scripts/install-hooks.sh"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.3",
+    "@biomejs/biome": "^2.6.4",
     "@earendil-works/pi-coding-agent": "^0.99.2",
     "@earendil-works/pi-tui": "^0.99.2",
     "@sinclair/typebox": "^0.34.52",

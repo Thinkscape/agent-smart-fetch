@@ -74,14 +74,14 @@
     "hooks:install": "bash scripts/install-hooks.sh"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.6.3",
+    "@biomejs/biome": "^2.6.8",
     "@earendil-works/pi-coding-agent": "^0.99.2",
     "@earendil-works/pi-tui": "^0.99.2",
     "@sinclair/typebox": "^0.34.52",
-    "@types/bun": "^1.4.4",
+    "@types/bun": "^1.4.5",
     "@types/lodash": "^4.17.27",
     "@types/mime-types": "^3.0.1",
-    "defuddle": "^0.19.6",
+    "defuddle": "^0.19.13",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   },
